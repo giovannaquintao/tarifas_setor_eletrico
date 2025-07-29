@@ -115,6 +115,45 @@ ALUGUEL_ESTIMADO <-
   )
 
 
+OUTROS_RENDIMENTOS <-
+  read.fwf(paste0(address,"/OUTROS_RENDIMENTOS.txt"),
+           widths = c(2,4,1,9,2,1,2,2,2,7,10,10,2,2,12,10,10,1,1,14,14,10
+  )
+  , na.strings=c(" ")
+  , col.names = c("UF", "ESTRATO_POF", "TIPO_SITUACAO_REG",
+                  "COD_UPA", "NUM_DOM", "NUM_UC",
+                  "COD_INFORMANTE", "QUADRO", "SEQ", "V9001",
+                  "V8500", "V8501", "V9010", "V9011",
+                  "DEFLATOR", "V8500_DEFLA", "V8501_DEFLA",
+                  "COD_IMPUT_VALOR", "FATOR_ANUALIZACAO",
+                  "PESO", "PESO_FINAL", "RENDA_TOTAL")
+  , dec="."
+  )   
+
+
+
+RENDIMENTO_TRABALHO <- 
+  read.fwf(paste0(address,"/RENDIMENTO_TRABALHO.txt"),
+           , widths = c(2,4,1,9,2,1,2,2,1,1,7,1,1,1,1,1,1,7,7,
+                        7,7,2,2,3,1,12,10,10,10,10,1,1,14,14,
+                        10,4,5)
+           , na.strings=c(" ")
+           , col.names = c("UF", "ESTRATO_POF", "TIPO_SITUACAO_REG",
+                           "COD_UPA", "NUM_DOM", "NUM_UC",
+                           "COD_INFORMANTE", "QUADRO", "SUB_QUADRO",
+                           "SEQ", "V9001", "V5302", "V53021", "V5303",
+                           "V5304", "V5305", "V5307", "V8500", "V531112",
+                           "V531122", "V531132", "V9010", "V9011",
+                           "V5314", "V5315", "DEFLATOR", "V8500_DEFLA",
+                           "V531112_DEFLA", "V531122_DEFLA",
+                           "V531132_DEFLA", "COD_IMPUT_VALOR",
+                           "FATOR_ANUALIZACAO", "PESO", "PESO_FINAL",
+                           "RENDA_TOTAL","V53011","V53061")
+           , dec="."
+  )
+
+saveRDS(RENDIMENTO_TRABALHO, "data/clean/RENDIMENTO_TRABALHO.rds")
+saveRDS(OUTROS_RENDIMENTOS, "data/clean/OUTROS_RENDIMENTOS.rds")
 saveRDS(DOMICILIO, "data/clean/DOMICILIO.rds")
 saveRDS(MORADOR, "data/clean/MORADOR.rds")
 saveRDS(DESPESA_COLETIVA, "data/clean/DESPESA_COLETIVA.rds")
