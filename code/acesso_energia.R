@@ -28,6 +28,7 @@ table(base_final$outra_origem)
 table(base_final$energia_integral)
 
 
+options(survey.lonely.psu = "adjust")  # ou "certainty", "remove", "average"
 
 design <- svydesign(
   id = ~COD_UPA,

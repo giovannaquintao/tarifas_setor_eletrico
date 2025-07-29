@@ -63,6 +63,7 @@ DESPESA_COLETIVA_2 <- DESPESA_COLETIVA %>%
     despesa_energia=sum(V8000_DEFLA_anual[V9001==600101],na.rm=T),
     inss_anual = sum(inss_anual, na.rm = TRUE),
     quantidade_kws=sum(V9005,na.rm=T),
+    quantidade_kws_NI=sum(V9005[COD_IMPUT_QUANTIDADE==0],na.rm=T),
     .groups = "drop"
   )
 
