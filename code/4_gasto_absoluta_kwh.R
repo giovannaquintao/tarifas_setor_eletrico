@@ -98,7 +98,10 @@ ft <- flextable(df_fmt) %>%
   bold(i = grepl("▸", df_fmt$Grupo), bold = TRUE) %>%
   align(align = "left", part = "all") %>%
   autofit() %>%
-  set_table_properties(layout = "autofit")
+  set_table_properties(layout = "autofit")%>%
+  font(fontname = "Times New Roman", part = "all") %>%
+  fontsize(size = 11, part = "all")%>%
+  padding(padding = 0, part = "all") 
 
 ft
 # 7. Exportar para Word

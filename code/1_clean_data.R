@@ -65,7 +65,7 @@ DESPESA_COLETIVA_2 <- DESPESA_COLETIVA %>%
     quantidade_kws=sum(V9005,na.rm=T),
     quantidade_kws_NI=sum(V9005[COD_IMPUT_QUANTIDADE==0],na.rm=T),
     .groups = "drop"
-  )
+  ) 
 
 
 DESPESA_INDIVIDUAL_2 <- DESPESA_INDIVIDUAL %>%
@@ -182,7 +182,10 @@ base_final<-base_final %>%
   ungroup()
 
 
-
+base_final <- base_final %>%
+  rowwise() %>%
+  mutate(gastos_hab = sum(despesa_coletiva, aluguel, na.rm = TRUE) / 12) %>%
+  ungroup()
 
 salario_minimo <- 998 
 # valor do salário mínimo na POF 2017-2018
@@ -202,5 +205,16 @@ base_final <- base_final %>%
     rural = loc_dom == "Rural",
     urbano = loc_dom == "Urbano"
   )
+
+base_final <- base_final %>%
+  mutate(
+    mulher_negra_renda_media = mulher_negra_ref & renda_pc_05a3,
+    homem_branco_renda_media = homem_branco_ref & renda_pc_05a3,
+    homem_branco_renda_alta = homem_branco_ref &  renda_pc_mais3,
+    mulher_branca_renda_alta = mulher_branca_ref &  renda_pc_mais3
+  )
+
+
+
 
 write_csv(base_final, "data/clean/base_final.csv")

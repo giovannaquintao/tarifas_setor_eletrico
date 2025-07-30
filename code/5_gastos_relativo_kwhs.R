@@ -13,7 +13,7 @@ mean(base_final$RENDA_TOTAL)
 names(base_final)
 base_final<-base_final %>% 
   filter(is.na(despesa_energia)==F&despesa_energia>0&RENDA_TOTAL>0) %>% 
-  mutate(pct_energia_consumo=despesa_energia/gastos_totais,
+  mutate(pct_energia_consumo=despesa_energia/gastos_hab,
          pct_energia_renda=despesa_energia/RENDA_TOTAL)
 
 mean(base_final$despesa_energia, na.rm = TRUE)
@@ -112,13 +112,16 @@ df_long <- stats %>%
   mutate(ic_lower = ifelse(variavel == "media_consumo", ic_lower_g, ic_lower_r),
          ic_upper = ifelse(variavel == "media_consumo", ic_upper_g, ic_upper_r),
          variavel = recode(variavel,
-                           "media_consumo" = "Gasto Energia sobre total de gastos (%)",
-                           "media_renda" = "Gasto Energia sobre renda total (%)"))
+                           "media_consumo" = "Gasto Energia sobre Gastos com Habitação (%)",
+                           "media_renda" = "Gasto Energia sobre Renda Total (%)"))
 
 
-ggplot(df_long %>% filter(categoria == "Renda") %>% 
-         mutate(grupo_label = fct_reorder(grupo_label, media, .desc = TRUE)), 
-       aes(x = grupo_label, y = media, fill = variavel)) +
+k<-df_long %>% filter(categoria == "Renda") %>% 
+  mutate(grupo_label = fct_reorder(grupo_label, media, .desc = TRUE))
+
+k
+ggplot(k)+ 
+aes(x = grupo_label, y = media, fill = variavel) +
   geom_col(position = position_dodge(width = 0.8)) +
   geom_errorbar(aes(ymin = ic_lower, ymax = ic_upper),
                 position = position_dodge(width = 0.8), width = 0.2) +
@@ -132,13 +135,16 @@ ggplot(df_long %>% filter(categoria == "Renda") %>%
 
 
 
-ggsave("output/renda_consumo_relativo.png")
+ggsave("output/renda_consumo_relativo.png", width = 8, height = 6)
 
 
+k<-df_long %>% filter(categoria == "Localidade") %>% 
+  mutate(grupo_label = fct_reorder(grupo_label, media, .desc = TRUE))
 
-ggplot(df_long %>% filter(categoria == "Localidade") %>% 
-         mutate(grupo_label = fct_reorder(grupo_label, media, .desc = TRUE)), 
-       aes(x = grupo_label, y = media, fill = variavel)) +
+k
+
+ggplot(k)+ 
+       aes(x = grupo_label, y = media, fill = variavel) +
   geom_col(position = position_dodge(width = 0.8)) +
   geom_errorbar(aes(ymin = ic_lower, ymax = ic_upper),
                 position = position_dodge(width = 0.8), width = 0.2) +
@@ -152,9 +158,9 @@ ggplot(df_long %>% filter(categoria == "Localidade") %>%
 
 
 
-ggsave("output/localidade_consumo_relativo.png")
+ggsave("output/localidade_consumo_relativo.png", width = 8, height = 6)
 
-
+k
 genero_raca <- df_long %>%
   filter(categoria == "Gênero/Raça") %>%
   filter(!grupo_label%in%c("Homem ","Mulher ")) %>% 
@@ -165,7 +171,7 @@ genero_raca <- df_long %>%
       TRUE ~ "Ambos"
     ))
 
-
+genero_raca
 ggplot(genero_raca %>% 
          filter(categoria == "Gênero/Raça") %>% 
          mutate(grupo_label = fct_reorder(grupo_label, media, .desc = TRUE)), 
@@ -184,5 +190,6 @@ ggplot(genero_raca %>%
 
 
 
-ggsave("output/genero_consumo_relativo.png")
+ggsave("output/genero_consumo_relativo.png", width = 8, height = 6)
+
 
