@@ -27,9 +27,9 @@ design <- svydesign(
 colunas_grupos <- c(
   "homem_ref", "mulher_ref", "homem_negro_ref", "mulher_negra_ref", 
   "homem_branco_ref", "mulher_branca_ref",
-  "renda_pc_ate_05", "renda_pc_05a3", "renda_pc_mais3", "rural", "urbano"
+  "renda_pc_ate_05", "renda_pc_05a3", "renda_pc_mais3", "rural", "urbano",
+  "mulher_negra_renda_media", "homem_branco_renda_media", "homem_branco_renda_alta",  "mulher_branca_renda_alta"
 )
-
 # 3. Calcular média e erro padrão para quantidade_kws
 stats <- map_dfr(colunas_grupos, function(var) {
   subdesign <- subset(design, get(var) == TRUE & !is.na(quantidade_kws))
@@ -43,12 +43,15 @@ stats <- map_dfr(colunas_grupos, function(var) {
   )
 })
 
-# 4. Rotulagem
 stats <- stats %>%
   mutate(
     categoria = case_when(
-      str_detect(grupo, "renda") ~ "Renda",
+      str_detect(grupo, "mulher_negra_renda_media") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "homem_branco_renda_media") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "homem_branco_renda_alta") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "mulher_branca_renda_alta") ~ "Renda/Gênero/Raça",
       grupo %in% c("rural", "urbano") ~ "Localidade",
+      str_detect(grupo, "renda") ~ "Renda",
       TRUE ~ "Gênero/Raça"
     ),
     grupo_label = case_when(
@@ -63,9 +66,14 @@ stats <- stats %>%
       grupo == "renda_pc_mais3" ~ "Acima de 3 SM per capita",
       grupo == "rural" ~ "Zona rural",
       grupo == "urbano" ~ "Zona urbana",
+      grupo == "mulher_negra_renda_media" ~ "Mulher negra (renda média)",
+      grupo == "homem_branco_renda_media" ~ "Homem branco (renda média)",
+      grupo == "homem_branco_renda_alta" ~ "Homem branco (renda alta)",
+      grupo == "mulher_branca_renda_alta" ~ "Mulher branca (renda alta)",
       TRUE ~ grupo
     )
   )
+
 
 # 5. Formatar tabela
 df_fmt <- stats %>%

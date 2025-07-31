@@ -13,19 +13,20 @@ mean(base_final$RENDA_TOTAL)
 names(base_final)
 base_final<-base_final %>% 
   filter(is.na(despesa_energia)==F&despesa_energia>0&RENDA_TOTAL>0) %>% 
-  mutate(pct_energia_consumo=despesa_energia/gastos_hab,
+  mutate(pct_energia_consumo=despesa_energia/gastos_habitacao,
          pct_energia_renda=despesa_energia/RENDA_TOTAL)
 
 mean(base_final$despesa_energia, na.rm = TRUE)
 mean(base_final$RENDA_TOTAL, na.rm = TRUE)
 mean(base_final$pct_energia_renda, na.rm = TRUE)
 options(survey.lonely.psu = "adjust")  # ou "certainty", "remove", "average"
+# Grupos
 colunas_grupos <- c(
   "homem_ref", "mulher_ref", "homem_negro_ref", "mulher_negra_ref", 
   "homem_branco_ref", "mulher_branca_ref",
-  "renda_pc_ate_05", "renda_pc_05a3", "renda_pc_mais3", "rural", "urbano"
+  "renda_pc_ate_05", "renda_pc_05a3", "renda_pc_mais3", "rural", "urbano",
+  "mulher_negra_renda_media", "homem_branco_renda_media", "homem_branco_renda_alta",  "mulher_branca_renda_alta"
 )
-
 
 design <- svydesign(
   id = ~COD_UPA,
@@ -82,27 +83,35 @@ stats <- stats %>%
     ic_lower_r = media_renda - 1.96 * erro_padrao_r,
     ic_upper_r = media_renda + 1.96 * erro_padrao_r,
     categoria = case_when(
-      str_detect(grupo, "renda") ~ "Renda",
+      str_detect(grupo, "mulher_negra_renda_media") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "homem_branco_renda_media") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "homem_branco_renda_alta") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "mulher_branca_renda_alta") ~ "Renda/Gênero/Raça",
       grupo %in% c("rural", "urbano") ~ "Localidade",
+      str_detect(grupo, "renda") ~ "Renda",
       TRUE ~ "Gênero/Raça"
     ),
     grupo_label = case_when(
-      grupo == "homem_ref" ~ "Homem ",
-      grupo == "mulher_ref" ~ "Mulher ",
-      #   grupo == "negra_ref" ~ "Pessoa negra ",
-      grupo == "homem_negro_ref" ~ "Homem negro ",
-      grupo == "mulher_negra_ref" ~ "Mulher negra ",
-      grupo == "homem_branco_ref" ~ "Homem branco ",
-      grupo == "mulher_branca_ref" ~ "Mulher branca ",
-      grupo == "renda_pc_ate_05" ~ "Até 0,5 SM pc",
-      grupo == "renda_pc_05a3" ~ "De 0,5 a 3 SM pc",
-      grupo == "renda_pc_mais3" ~ "Acima de 3 SM pc",
+      grupo == "homem_ref" ~ "Homem",
+      grupo == "mulher_ref" ~ "Mulher",
+      grupo == "homem_negro_ref" ~ "Homem negro",
+      grupo == "mulher_negra_ref" ~ "Mulher negra",
+      grupo == "homem_branco_ref" ~ "Homem branco",
+      grupo == "mulher_branca_ref" ~ "Mulher branca",
+      grupo == "renda_pc_ate_05" ~ "Até 0,5 SM per capita",
+      grupo == "renda_pc_05a3" ~ "De 0,5 a 3 SM per capita",
+      grupo == "renda_pc_mais3" ~ "Acima de 3 SM per capita",
       grupo == "rural" ~ "Zona rural",
       grupo == "urbano" ~ "Zona urbana",
+      grupo == "mulher_negra_renda_media" ~ "Mulher negra (renda média)",
+      grupo == "homem_branco_renda_media" ~ "Homem branco (renda média)",
+      grupo == "homem_branco_renda_alta" ~ "Homem branco (renda alta)",
+      grupo == "mulher_branca_renda_alta" ~ "Mulher branca (renda alta)",
       TRUE ~ grupo
     )
   ) %>% 
   select(grupo_label,categoria,starts_with("media"),starts_with("ic"))
+
 
 # Supondo que o seu dataframe se chama "df"
 # Primeiro, transformamos para formato longo
@@ -192,4 +201,35 @@ ggplot(genero_raca %>%
 
 ggsave("output/genero_consumo_relativo.png", width = 8, height = 6)
 
+
+names(df_long)
+genero_raca_renda <- df_long %>%
+  filter(categoria == "Renda/Gênero/Raça") %>%
+  filter(!grupo_label%in%c("Homem ","Mulher ")) %>% 
+  mutate(
+    sexo = case_when(
+      str_detect(grupo_label, "Homem") ~ "Homem",
+      str_detect(grupo_label, "Mulher") ~ "Mulher",
+      TRUE ~ "Ambos"
+    ))
+
+genero_raca_renda
+ggplot(genero_raca_renda %>% 
+         mutate(grupo_label = fct_reorder(grupo_label, media, .desc = TRUE)), 
+       aes(x = grupo_label, y = media, fill = variavel, alpha = sexo)) +
+  geom_col(position = position_dodge(width = 0.8)) +
+  geom_errorbar(aes(ymin = ic_lower, ymax = ic_upper),
+                position = position_dodge(width = 0.8), width = 0.2) +
+  facet_wrap(~variavel, scales = "free_y") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_alpha_manual(values = c("Mulher" = 1, "Homem" = 0.6)) +
+  labs(x = NULL, y = NULL, fill = NULL, alpha = "Sexo") +  # <- aqui define o nome da legenda do alpha
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.8),
+        legend.position = "none")
+
+
+
+ggsave("output/genero_raca_renda_consumo_relativo.png", width = 9, height = 6)
 
