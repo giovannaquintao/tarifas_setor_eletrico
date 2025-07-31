@@ -61,6 +61,7 @@ DESPESA_COLETIVA_2 <- DESPESA_COLETIVA %>%
   summarise(
     despesa_coletiva = sum(V8000_DEFLA_anual, na.rm = TRUE),
     despesa_energia=sum(V8000_DEFLA_anual[V9001==600101],na.rm=T),
+    despesa_gas=sum(V8000_DEFLA_anual[V9001==700101],na.rm=T),
     inss_anual = sum(inss_anual, na.rm = TRUE),
     quantidade_kws=sum(V9005,na.rm=T),
     quantidade_kws_NI=sum(V9005[COD_IMPUT_QUANTIDADE==0],na.rm=T),
@@ -96,7 +97,7 @@ habitacao <- DESPESA_COLETIVA %>%
     )) %>%
   group_by(id_uc) %>%
   summarise(
-    habitacao = sum(V8000_DEFLA_anual, na.rm = TRUE),
+    contas_casa = sum(V8000_DEFLA_anual, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -170,22 +171,27 @@ base_final <- MORADOR_2 %>%
   left_join(ALUGUEL_ESTIMADO_2, by = "id_uc")
 
 
-base_final<-base_final %>% 
-  mutate(despesa_energia=despesa_energia/12) %>% 
+base_final <- base_final %>% 
+  mutate(preco_kwh = despesa_energia/quantidade_kws) %>% 
+
+  # 1. Transformar despesas anuais em mensais
+  mutate(
+    despesa_energia = despesa_energia / 12,
+    contas_casa = contas_casa / 12,
+    aluguel = aluguel / 12,
+    despesa_coletiva = despesa_coletiva / 12,
+    caderneta_coletiva = caderneta_coletiva / 12,
+    despesa_individual = despesa_individual / 12,
+    despesa_gas = despesa_gas / 12
+  ) %>% 
+  # 2. Somar os componentes já mensais
   rowwise() %>%
-  mutate(gastos_habitacao=sum(habitacao,aluguel,na.rm=T),
-         gastos_totais=sum(despesa_coletiva,caderneta_coletiva,
-                           aluguel,
-                           despesa_individual
-                           ,
-                           na.rm=T)/12) %>% 
+  mutate(
+    gastos_habitacao = sum(contas_casa, aluguel, na.rm = TRUE),
+    gastos_totais = sum(despesa_coletiva, caderneta_coletiva, aluguel, despesa_individual, na.rm = TRUE)
+  ) %>% 
   ungroup()
 
-
-base_final <- base_final %>%
-  rowwise() %>%
-  mutate(gastos_hab = sum(despesa_coletiva, aluguel, na.rm = TRUE) / 12) %>%
-  ungroup()
 
 salario_minimo <- 998 
 # valor do salário mínimo na POF 2017-2018

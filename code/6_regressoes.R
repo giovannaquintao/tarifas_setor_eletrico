@@ -1,8 +1,16 @@
 
 library(tidyverse)
 library(survey)
+library(scales)
+library(flextable)
+library(officer)
+library(dplyr)
+library(purrr)
+library(tibble)
 
 rm(list=ls())
+
+
 gc()
 
 
@@ -11,23 +19,20 @@ base_final<-read_csv("data/clean/base_final.csv")
 
 # Grupos
 colunas_grupos <- c(
-   "rural", "urbano",
+  "rural", "urbano",
   "mulher_negra_renda_media", "homem_branco_renda_media", "homem_branco_renda_alta",  "mulher_branca_renda_alta"
 )
-names(base_final)
 
 ################# regressao ##################
 
-base_final <- base_final %>%
-  mutate(preco_kwh = despesa_energia/quantidade_kws)
-
+base_final <- base_final
 
 # Remover casos problemáticos
 base_final2 <- base_final %>%
   filter(despesa_energia > 0, RENDA_DISP_PC > 0, preco_kwh > 0) %>% 
   filter(is.na(quantidade_kws_NI)==F&quantidade_kws_NI>0) %>% 
   filter(renda_pc_05a3 | renda_pc_mais3) %>% 
-  mutate(UF=as.factor(UF)) 
+  mutate(UF=as.factor(UF))
 
 
 
@@ -43,77 +48,118 @@ design <- svydesign(
 options(survey.lonely.psu = "adjust")
 
 
-
-
-names(base_final)
-modelo_svy <- svyglm(
-  log(quantidade_kws_NI) ~ 
-    log(preco_kwh) + 
-    log(preco_kwh):mulher_negra_renda_media +
-    log(preco_kwh):homem_branco_renda_media +
-    log(preco_kwh):homem_branco_renda_alta +
-    log(preco_kwh):mulher_branca_renda_alta +
-    log(preco_kwh):rural +RENDA_DISP_PC,
-  design = design
+subgrupos <- c(
+  "mulher_negra_renda_media",
+  "homem_branco_renda_media",
+  "homem_branco_renda_alta",
+  "mulher_branca_renda_alta",
+  "rural",
+  "urbano"
 )
 
-summary(modelo_svy)
 
-# Obtenha os coeficientes
-coefs <- coef(modelo_svy)
-
-
-# Grupo de referência:
-# homem branco, renda baixa (até 0,5 SM), urbano
-elas_base <- coefs["log(preco_kwh)"]
-
-# Elasticidades por grupo (soma do coeficiente base + interação)
-elas_mulher_negra_renda_media   <- elas_base + coefs["log(preco_kwh):mulher_negra_renda_mediaTRUE"]
-elas_homem_branco_renda_media   <- elas_base + coefs["log(preco_kwh):homem_branco_renda_mediaTRUE"]
-elas_homem_branco_renda_alta    <- elas_base + coefs["log(preco_kwh):homem_branco_renda_altaTRUE"]
-elas_mulher_branca_renda_alta   <- elas_base + coefs["log(preco_kwh):mulher_branca_renda_altaTRUE"]
-elas_rural                      <- elas_base + coefs["log(preco_kwh):ruralTRUE"]
-
-# Criar data frame com as elasticidades
-elasticidades <- data.frame(
-  grupo = c(
-    "Homem branco (renda baixa)",  # grupo de referência
-    "Mulher negra (renda média)",
-    "Homem branco (renda média)",
-    "Homem branco (renda alta)",
-    "Mulher branca (renda alta)",
-    "Zona rural",
-    "Zona urbana"  # mesma elasticidade do grupo de referência
-  ),
-  elasticidade_preco = c(
-    elas_base,
-    elas_mulher_negra_renda_media,
-    elas_homem_branco_renda_media,
-    elas_homem_branco_renda_alta,
-    elas_mulher_branca_renda_alta,
-    elas_rural,
-    elas_base
+# Criar lista de modelos e elasticidades
+resultados <- purrr::map_dfr(subgrupos, function(grupo_nome) {
+  
+  # Filtrar o subgrupo
+  sub_design <- subset(design, get(grupo_nome) == TRUE)
+  
+  # Rodar o modelo simples
+  modelo <- svyglm(
+    log(quantidade_kws_NI) ~ log(preco_kwh)+UF+RENDA_DISP_PC,
+    design = sub_design
   )
-)
-
-
-elasticidades
-
-stats <- map_dfr(colunas_grupos, function(var) {
-  subdesign <- subset(design, get(var) == TRUE & !is.na(quantidade_kws))
-  resultado1 <- svymean(~quantidade_kws, subdesign, na.rm = TRUE)
-  resultado2 <- svymean(~RENDA_DISP_PC, subdesign, na.rm = TRUE)
-  resultado3 <- svymean(~gastos_totais, subdesign, na.rm = TRUE)
+  
+  # Extrair elasticidade (coeficiente)
+  coef_est <- coef(modelo)["log(preco_kwh)"]
+  se_est   <- sqrt(vcov(modelo)["log(preco_kwh)", "log(preco_kwh)"])
+  ic_low   <- coef_est - 1.96 * se_est
+  ic_high  <- coef_est + 1.96 * se_est
+  
+  # Voltar como tibble
   tibble(
-    grupo = var,
-    media_kwh = as.numeric(coef(resultado1)),
-    media_renda = as.numeric(coef(resultado2)),
-    media_gastos = as.numeric(coef(resultado3))
+    grupo = grupo_nome,
+    elasticidade = coef_est,
+    se = se_est,
+    ic_inf = ic_low,
+    ic_sup = ic_high
   )
 })
 
 
-stats2 <- stats %>%
+
+resultados <- resultados %>%
+  mutate(
+    grupo_label = case_when(
+      grupo == "homem_branco_renda_baixa" ~ "Homem branco (renda baixa)",
+      grupo == "mulher_negra_renda_media" ~ "Mulher negra (renda média)",
+      grupo == "homem_branco_renda_media" ~ "Homem branco (renda média)",
+      grupo == "mulher_branca_renda_alta" ~ "Mulher branca (renda alta)",
+      grupo == "homem_branco_renda_alta"  ~ "Homem branco (renda alta)",
+      grupo == "urbano" ~ "Zona urbana",
+      grupo == "rural" ~ "Zona rural",
+      TRUE ~ grupo
+    ),
+    grupo_label = factor(grupo_label, levels = c(
+      "Homem branco (renda baixa)",
+      "Mulher negra (renda média)",
+      "Homem branco (renda média)",
+      "Mulher branca (renda alta)",
+      "Homem branco (renda alta)",
+      "Zona urbana",
+      "Zona rural"
+    ))
+  )
+
+resultados
+ggplot(resultados, aes(x = grupo_label, y = elasticidade)) +
+  geom_col(fill = "steelblue") +
+  geom_errorbar(aes(ymin = ic_inf, ymax = ic_sup), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
+  labs(
+    title = "Elasticidade-preço da demanda por energia elétrica",
+    x = NULL,
+    y = "Elasticidade (log-log)"
+  ) +
+  theme_minimal(base_size = 12) +
+  coord_flip()
+
+ggsave("output/elasticidades.png", width = 8, height = 6)
+
+
+design_complete <- svydesign(
+  ids = ~COD_UPA,
+  strata = ~ESTRATO_POF,
+  weights = ~PESO_FINAL,
+  data = base_final,
+  nest = TRUE
+)
+names(base_final)
+
+
+
+
+
+stats <- map_dfr(colunas_grupos, function(var) {
+  subdesign <- subset(design_complete, get(var) == TRUE & !is.na(quantidade_kws))
+  resultado1 <- svymean(~quantidade_kws, subdesign, na.rm = TRUE)
+  resultado2 <- svymean(~RENDA_DISP_PC, subdesign, na.rm = TRUE)
+  resultado3 <- svymean(~gastos_habitacao, subdesign, na.rm = TRUE)
+  resultado4 <- svymean(~contas_casa, subdesign, na.rm = TRUE)
+  total_fam    <- svytotal(~I(!is.na(gastos_totais)), subdesign)  # ponderado
+  
+  tibble(
+    grupo = var,
+    media_kwh = as.numeric(coef(resultado1)),
+    media_renda = as.numeric(coef(resultado2)),
+    media_gastos = as.numeric(coef(resultado3)),
+    media_contas = as.numeric(coef(resultado4)),
+    n_familias = as.numeric(coef(total_fam)[[2]])
+  )
+})
+
+
+stats <- stats %>%
   mutate(
     categoria = case_when(
       str_detect(grupo, "mulher_negra_renda_media") ~ "Renda/Gênero/Raça",
@@ -123,68 +169,334 @@ stats2 <- stats %>%
       grupo %in% c("rural", "urbano") ~ "Localidade",
       str_detect(grupo, "renda") ~ "Renda",
       TRUE ~ "Gênero/Raça"
-    ),
-    grupo_label = case_when(
-      grupo == "rural" ~ "Zona rural",
-      grupo == "urbano" ~ "Zona urbana",
-      grupo == "mulher_negra_renda_media" ~ "Mulher negra (renda média)",
-      grupo == "homem_branco_renda_media" ~ "Homem branco (renda média)",
-      grupo == "homem_branco_renda_alta" ~ "Homem branco (renda alta)",
-      grupo == "mulher_branca_renda_alta" ~ "Mulher branca (renda alta)",
-      TRUE ~ grupo
-    )
-  ) %>% 
-  select(-grupo) %>% 
-  rename(grupo=grupo_label)
+    )) %>% 
+  left_join(.,resultados,by="grupo") 
+
+names(stats)
+
+###################### Impacto tarifario #####################################
 
 
 
-# Adiciona à sua tabela
-stats2<-stats2 %>% 
-  left_join(.,elasticidades,by="grupo") %>% 
-  mutate(preco=0.70) %>% 
-  mutate(preco_novo=preco+0.07877) %>% 
-  mutate(aumento_preco=100*0.07877/0.70)
+p<-0.7
+tarifa_vermelha_2<-0.07877
+
+vermelha_2<-stats %>% 
+  select(grupo,grupo_label,categoria,media_kwh,media_renda,media_gastos,media_contas,elasticidade,n_familias) %>% 
+  mutate(preco=p) %>% 
+  mutate(preco_novo=preco+tarifa_vermelha_2) %>% 
+  mutate(pct_aumento_preco=100*tarifa_vermelha_2/p)%>% 
+  mutate(pct_consumo_after=elasticidade*pct_aumento_preco)
 
 
-stats2<-stats2 %>% 
-  mutate(pct_consumo_after=elasticidade_preco*aumento_preco) %>% 
-  mutate(var_consumo=pct_consumo_after/100*media_kwh) %>% 
+
+vermelha_2<-vermelha_2 %>% 
+  mutate(consumo_after=(1+pct_consumo_after/100)*media_kwh) %>% 
   mutate(gasto_antes=preco*media_kwh) %>% 
-  mutate(gasto_depois=preco_novo*(media_kwh-var_consumo))
+  mutate(gasto_depois=preco_novo*consumo_after)
 
 
-stats2<-stats2 %>% 
-  mutate(dif=gasto_depois-gasto_antes) %>% 
-  mutate(dif_renda=100*dif/media_renda) %>%
-  mutate(dif_gastos=100*dif/media_gastos) %>% 
-  mutate(pct_dif=100*(gasto_depois-gasto_antes)/gasto_antes)
+vermelha_2<-vermelha_2 %>% 
+  mutate(abs_dif=gasto_depois-gasto_antes) %>% 
+  mutate(pct_dif_renda=abs_dif/media_renda) %>%
+  mutate(pct_dif_gastos=abs_dif/media_gastos) %>% 
+  mutate(pct_dif=(gasto_depois-gasto_antes)/gasto_antes)%>% 
+  select(grupo,grupo_label,categoria,n_familias,starts_with("pct_dif"),abs_dif)
 
 
-#aumenta o preco, reduz o consumo, 
-
-# Adicionar categorias e labels
+tarifa_vermelha_1<-0.04463
 
 
-elasticidade<-stats2 %>% 
-  select(grupo,categoria,elasticidade_preco) %>% 
-  mutate(elasticidade_preco=100*round(elasticidade_preco,4))
-
-# Primeiro, transformamos para formato longo
-df_long <- stats2 %>%
-  select(categoria,grupo_label,grupo,dif_gastos,dif_renda,pct_dif) %>% 
-  pivot_longer(cols = c(dif_renda,dif_gastos,pct_dif),
-               names_to = "variavel", values_to = "media")
+vermelha_1<-stats %>% 
+  select(grupo,grupo_label,categoria,media_kwh,media_renda,media_gastos,media_contas,elasticidade) %>% 
+  mutate(preco=p) %>% 
+  mutate(preco_novo=preco+tarifa_vermelha_1) %>% 
+  mutate(pct_aumento_preco=100*tarifa_vermelha_1/p)%>% 
+  mutate(pct_consumo_after=elasticidade*pct_aumento_preco)
 
 
-ggplot(df_long %>% filter(categoria == "Renda"&variavel=="dif_gastos") , 
-       aes(x = grupo_label, y = media, fill = variavel)) +
+
+vermelha_1<-vermelha_1 %>% 
+  mutate(consumo_after=(1+pct_consumo_after/100)*media_kwh) %>% 
+  mutate(gasto_antes=preco*media_kwh) %>% 
+  mutate(gasto_depois=preco_novo*consumo_after)
+
+
+vermelha_1<-vermelha_1 %>% 
+  mutate(abs_dif=gasto_depois-gasto_antes) %>% 
+  mutate(pct_dif_renda=abs_dif/media_renda) %>%
+  mutate(pct_dif_gastos=abs_dif/media_gastos) %>% 
+  mutate(pct_dif=(gasto_depois-gasto_antes)/gasto_antes)%>% 
+  select(grupo,starts_with("pct_dif"),abs_dif)
+
+
+
+
+tarifa_amarela<-0.01885
+
+amarela<-stats %>% 
+  select(grupo,grupo_label,categoria,media_kwh,media_renda,media_gastos,media_contas,elasticidade) %>% 
+  mutate(preco=p) %>% 
+  mutate(preco_novo=preco+tarifa_amarela) %>% 
+  mutate(pct_aumento_preco=100*tarifa_amarela/p)%>% 
+  mutate(pct_consumo_after=elasticidade*pct_aumento_preco)
+
+
+
+amarela<-amarela%>% 
+  mutate(consumo_after=(1+pct_consumo_after/100)*media_kwh) %>% 
+  mutate(gasto_antes=preco*media_kwh) %>% 
+  mutate(gasto_depois=preco_novo*consumo_after)
+
+
+amarela<-amarela %>% 
+  mutate(abs_dif=gasto_depois-gasto_antes) %>% 
+  mutate(pct_dif_renda=abs_dif/media_renda) %>%
+  mutate(pct_dif_gastos=abs_dif/media_gastos) %>% 
+  mutate(pct_dif=(gasto_depois-gasto_antes)/gasto_antes) %>% 
+  select(grupo,starts_with("pct_dif"),abs_dif)
+
+
+
+
+###################### Bind all #####################################
+
+amarela_renamed <- amarela %>%
+  rename_with(~ paste0(., "_amarela"), .cols = -grupo)
+
+impacto <- vermelha_1 %>% 
+  left_join(vermelha_2, by = "grupo", suffix = c("_vermelha_1", "_vermelha_2")) %>% 
+  left_join(amarela_renamed, by = "grupo")
+
+
+names(impacto)
+impacto %>%
+  ggplot(aes(x = grupo_label, y = pct_dif_amarela, fill = categoria)) +
   geom_col(position = position_dodge(width = 0.8)) +
-  facet_wrap(~variavel, scales = "free_y") +
-#  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  scale_fill_brewer(palette = "Set2") +
+  geom_text(
+    aes(label = scales::percent(pct_dif_amarela, accuracy = 0.01)),
+    vjust = -0.3,
+    size = 4
+  ) +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 0.01),
+    limits = c(0, NA),
+    expand = expansion(mult = c(0, 0.1))
+  ) +
+  scale_fill_manual(values = c(
+    "#B58900" ,  # amarelo queimado,
+    "#F4B400" 
+  )) +
   labs(x = NULL, y = NULL, fill = NULL) +
   theme_minimal(base_size = 13) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.position = "none")
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
 
+ggsave("output/impact_amarela.png", width = 8, height = 6)
+
+names(impacto)
+impacto %>%
+  ggplot(aes(x = grupo_label, y = pct_dif_vermelha_1, fill = categoria),alpha=0.4) +
+  geom_col(position = position_dodge(width = 0.8),alpha=0.6) +
+  geom_text(
+    aes(label = scales::percent(pct_dif_vermelha_1, accuracy = 0.01)),
+    vjust = -0.3,
+    size = 4
+  ) +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 0.01),
+    limits = c(0, NA),
+    expand = expansion(mult = c(0, 0.1))
+  ) +
+  scale_fill_manual(values = c(
+    "#CC0000",
+    "#990000"  # vermelho forte# vermelho escuro
+    
+  )) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+
+ggsave("output/impact_vermelha_1.png", width = 8, height = 6)
+
+
+impacto %>%
+  ggplot(aes(x = grupo_label, y = pct_dif_vermelha_2, fill = categoria)) +
+  geom_col(position = position_dodge(width = 0.8)) +
+  geom_text(
+    aes(label = scales::percent(pct_dif_vermelha_2, accuracy = 0.01)),
+    vjust = -0.3,
+    size = 4
+  ) +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 0.01),
+    limits = c(0, NA),
+    expand = expansion(mult = c(0, 0.1))
+  ) +
+  scale_fill_manual(values = c(
+    "#CC0000",
+    "#990000"  # vermelho forte# vermelho escuro
+    
+  )) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+
+ggsave("output/impact_vermelha_2.png", width = 8, height = 6)
+
+##################### tabela impacto ####################################
+
+table_impacto <- impacto %>% 
+  select(grupo_label, categoria, starts_with("pct_dif_renda"), starts_with("pct_dif_gastos")) %>% 
+  mutate(across(where(is.numeric), ~ . * 100))
+# 1. Organizar a base
+df_tab_impacto <- table_impacto %>% 
+  select(
+    categoria,
+    grupo_label,
+    pct_dif_gastos_amarela,
+    pct_dif_renda_amarela,
+    pct_dif_gastos_vermelha_1,
+    pct_dif_renda_vermelha_1,
+    pct_dif_gastos_vermelha_2,
+    pct_dif_renda_vermelha_2,
+  ) %>%
+  rename(
+    Categoria = categoria,
+    Grupo = grupo_label,
+    `Renda` = pct_dif_renda_vermelha_2,
+    `Renda ` = pct_dif_renda_vermelha_1,
+    `Renda  ` = pct_dif_renda_amarela,
+    `Gastos totais` = pct_dif_gastos_vermelha_2,
+    `Gastos totais ` = pct_dif_gastos_vermelha_1,
+    `Gastos totais  ` = pct_dif_gastos_amarela
+  )
+
+# 2. Adicionar separadores por categoria
+df_fmt_impacto <- df_tab_impacto %>%
+  group_by(Categoria) %>%
+  group_split() %>%
+  map_dfr(~{
+    cat_name <- unique(.x$Categoria)
+    separador <- tibble(
+      Categoria = cat_name,
+      Grupo = paste0("▸ ", cat_name),
+      `Renda` = NA,
+      `Renda ` = NA,
+      `Renda  ` = NA,
+      `Gastos totais` = NA,
+      `Gastos totais ` = NA,
+      `Gastos totais  ` = NA
+    )
+    bind_rows(separador, .x)
+  }) %>%
+  ungroup() %>%
+  select(-Categoria) %>%
+  mutate(across(where(is.numeric), ~round(., 2)))
+
+# 3. Criar labels de cabeçalho com superheaders descritivos
+header_labels <- data.frame(
+  col_keys = names(df_fmt_impacto),
+  line2 = c("Grupo",
+            "Bandeira Amarela", "Bandeira Amarela", 
+            "Bandeira Vermelha I", "Bandeira Vermelha I",
+            "Bandeira Vermelha II", "Bandeira Vermelha II"),
+  line1 = c("", 
+            "Renda (%)", "Renda (%)", "Renda (%)", 
+            "Gastos totais (%)", "Gastos totais (%)", "Gastos totais (%)"),
+  stringsAsFactors = FALSE
+)
+
+# 4. Criar flextable com superheaders
+ft_impacto <- flextable(df_fmt_impacto) %>%
+  set_header_df(mapping = header_labels, key = "col_keys") %>%
+  merge_h(part = "header") %>%
+  theme_booktabs() %>%
+  bold(i = grepl("▸", df_fmt_impacto$Grupo), bold = TRUE) %>%
+  align(align = "left", part = "all") %>%
+  align(align = "center", part = "header") %>%
+  autofit() %>%
+  font(fontname = "Times New Roman", part = "all") %>%
+  fontsize(size = 11, part = "all") %>%
+  padding(padding = 0, part = "all")
+
+ft_impacto
+# 5. Exportar para Word
+doc <- read_docx() %>%
+  body_add_par("Tabela: Impacto percentual da mudança de bandeira tarifária", style = "heading 1") %>%
+  body_add_flextable(ft_impacto)
+
+print(doc, target = "output/tabela_impacto_bandeira_completa.docx")
+
+
+##################### absoluto familias #####################
+
+absoluto <- impacto %>% 
+  select(grupo_label, categoria,n_familias, starts_with("abs_dif"))
+
+names(absoluto)
+absoluto<-absoluto %>% 
+  mutate(total_perdido=1*abs_dif_vermelha_1+1*abs_dif_vermelha_2+2*abs_dif_amarela) %>% 
+  mutate(montante=(n_familias*total_perdido)/10^6) %>% 
+  select(-starts_with("abs"))
+
+
+
+library(dplyr)
+library(flextable)
+library(officer)
+
+# Organizar tabela
+df_tab <- absoluto %>%
+  arrange(categoria) %>%
+  rename(
+    Categoria = categoria,
+    Grupo = grupo_label,
+    `Nº de famílias` = n_familias,
+    `Gasto anual adicional (R$)` = total_perdido,
+    `Gasto anual adicional total (milhões R$)` = montante
+  )
+
+# Adicionar linhas de separação por categoria
+df_fmt <- df_tab %>%
+  group_by(Categoria) %>%
+  group_split() %>%
+  purrr::map_dfr(~{
+    cat_name <- unique(.x$Categoria)
+    separador <- tibble(
+      Categoria = cat_name,
+      Grupo = paste0("▸ ", cat_name),
+      `Nº de famílias` = NA,
+      `Gasto anual adicional (R$)` = NA,
+      `Gasto anual adicional total (milhões R$)` = NA
+    )
+    bind_rows(separador, .x)
+  }) %>%
+  ungroup() %>%
+  select(-Categoria) %>%
+  mutate(across(where(is.numeric), ~round(., 1)))
+
+# Criar flextable
+ft <- flextable(df_fmt) %>%
+  bold(i = grepl("▸", df_fmt$Grupo), bold = TRUE) %>%
+  align(align = "left", part = "all") %>%
+  autofit() %>%
+  set_table_properties(layout = "autofit") %>%
+  font(fontname = "Times New Roman", part = "all") %>%
+  fontsize(size = 11, part = "all") %>%
+  padding(padding = 0, part = "all")
+ft
+# Exportar para Word
+doc <- read_docx() %>%
+  body_add_par("Tabela: Impacto absoluto por grupo de famílias", style = "heading 1") %>%
+  body_add_flextable(ft)
+
+print(doc, target = "output/tabela_impacto_absoluto.docx")
