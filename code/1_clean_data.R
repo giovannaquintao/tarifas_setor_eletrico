@@ -273,7 +273,8 @@ base_final <- base_final %>%
     gastos_habitacao = sum(despesa_coletiva, aluguel, na.rm = TRUE),
     gastos_totais = sum(despesa_coletiva, caderneta_coletiva, aluguel, despesa_individual, na.rm = TRUE)
   ) %>% 
-  ungroup()
+  ungroup() %>% 
+  mutate()
 
 
 salario_minimo <- 954

@@ -54,3 +54,41 @@ k<-MORADOR%>%
 
 table(k$n,useNA = "always")
 
+
+k<-MORADOR %>% 
+  mutate(id_uc=paste0(COD_UPA,"_",NUM_DOM,"_",NUM_UC)) %>%
+  mutate(chefe= ifelse(V0306==1,1,0)) %>% 
+  group_by(id_uc) %>% 
+  summarise(n_chefes=sum(chefe,na.rm = TRUE))
+
+table(k$n_chefes,useNA = "always")
+
+
+df<-read_csv("data/clean/base_final.csv")
+
+names(df)
+
+table(is.na(df$RENDA_TOTAL),useNA = "always")
+table(is.na(df$RENDA_DISP_PC),useNA = "always")
+
+
+
+weighted.mean(df$despesa_energia,
+              w = df$PESO_FINAL, 
+              na.rm = TRUE)
+
+
+weighted.mean(df$gastos_totais, 
+               w = df$PESO_FINAL, 
+               na.rm = TRUE)
+
+weighted.mean(df$gastos_habitacao, 
+              w = df$PESO_FINAL, 
+              na.rm = TRUE)
+
+
+weighted.mean(df$aluguel,
+              w = df$PESO_FINAL, 
+              na.rm = TRUE)
+
+      
