@@ -80,9 +80,7 @@ weighted.mean(df$despesa_energia,
 
 weighted.mean(df$gastos_totais, 
                w = df$PESO_FINAL, 
-               na.rm = TRUE)
-
-weighted.mean(df$gastos_habitacao, 
+               na.rm = TRUE)-weighted.mean(df$gastos_habitacao, 
               w = df$PESO_FINAL, 
               na.rm = TRUE)
 
@@ -91,4 +89,30 @@ weighted.mean(df$aluguel,
               w = df$PESO_FINAL, 
               na.rm = TRUE)
 
-      
+
+
+# Plano amostral
+design <- svydesign(
+  id = ~COD_UPA,
+  strata = ~ESTRATO_POF,
+  weights = ~PESO_FINAL,
+  data = df,
+  nest = TRUE
+)
+media_gastos <- svymean(~gastos_totais, design, na.rm = TRUE)
+
+media_gastos
+media_renda  <- svymean(~RENDA_DISP_PC, design, na.rm = TRUE)
+
+media_renda
+media_hab    <- svymean(~gastos_habitacao, design, na.rm = TRUE)   
+media_hab
+aluguel    <- svymean(~aluguel, design, na.rm = TRUE)   
+aluguel
+media_renda  <- svymean(~RENDA_DISP_PC, design, na.rm = TRUE)
+media_renda*3
+names(df)
+media_renda  <- svymean(~RENDA_TOTAL, design, na.rm = TRUE)
+media_renda
+
+svymean(~despesa_gas, design, na.rm = TRUE)

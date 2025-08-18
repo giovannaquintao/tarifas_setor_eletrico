@@ -151,7 +151,7 @@ group_by(id_uc) %>%
 
 
 
-################### 3. Despesa Individual ################################
+################### 4. Despesa Individual ################################
 
 DESPESA_INDIVIDUAL_2 <- DESPESA_INDIVIDUAL %>%
   mutate(
@@ -170,7 +170,7 @@ DESPESA_INDIVIDUAL_2 <- DESPESA_INDIVIDUAL %>%
   ) %>% 
   ungroup()
 
-################### 4. Caderneta Coletiva ################################
+################### 5. Caderneta Coletiva ################################
 
 CADERNETA_COLETIVA_2 <- CADERNETA_COLETIVA %>%
   mutate(
@@ -185,7 +185,7 @@ CADERNETA_COLETIVA_2 <- CADERNETA_COLETIVA %>%
   ) %>% 
   ungroup()
 
-################### 5. Aluguel Estimado ################################
+################### 6. Aluguel Estimado ################################
 
 
 ALUGUEL_ESTIMADO_2<-ALUGUEL_ESTIMADO %>%
@@ -201,7 +201,7 @@ ALUGUEL_ESTIMADO_2<-ALUGUEL_ESTIMADO %>%
   ) %>% 
   ungroup()
 
-################### 6. Outros Rendimentos ################################
+################### 7. Outros Rendimentos ################################
 
 
 OUTROS_RENDIMENTOS_2<-OUTROS_RENDIMENTOS %>%
@@ -218,7 +218,7 @@ OUTROS_RENDIMENTOS_2<-OUTROS_RENDIMENTOS %>%
     deducao_anual = sum(deducao_anual, na.rm = TRUE),
     .groups = "drop"
   )
-################### 7. Rendimento do Trabalho ################################
+################### 8. Rendimento do Trabalho ################################
 
 
 RENDIMENTO_TRABALHO_2 <- RENDIMENTO_TRABALHO %>%
@@ -239,7 +239,7 @@ RENDIMENTO_TRABALHO_2 <- RENDIMENTO_TRABALHO %>%
   )
 
 
-################### 8. Bind All################################
+################### 9. Bind All################################
 
 
 base_final <- MORADOR_2 %>%
@@ -278,7 +278,7 @@ base_final <- base_final %>%
 
 
 salario_minimo <- 954
-# valor do salário mínim em 2018
+# valor do salário mínimo em 2018
 
 #(https://www.ipeadata.gov.br/ExibeSerie.aspx?serid=1739471028)
 
