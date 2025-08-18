@@ -1,3 +1,5 @@
+#This script opens the POF 2017-2018 data files and saves them as RDS files for further analysis.
+
 library(tidyverse)
 
 rm(list=ls())
