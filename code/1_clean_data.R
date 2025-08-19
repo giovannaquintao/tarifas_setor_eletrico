@@ -71,6 +71,32 @@ MORADOR_2<-MORADOR %>%
 
 
 
+################### 1b. Moradores do Dom ################################
+
+# V0306	Condição na Unidade de Consumo.
+# 	01 – Pessoa de referência da UC 
+
+# V0404	Sexo
+# 1 – Homem
+# 2 – Mulher
+
+# V0405	Cor ou raça	
+# 1 – Branca
+# 2 – Preta
+# 3 – Amarela
+# 4 – Parda
+# 5 – Indígena
+# 9 – Sem declaração
+
+
+
+MORADOR_3<-MORADOR %>%
+  mutate(id_uc=paste0(COD_UPA,"_",NUM_DOM,"_",NUM_UC)) %>%
+  group_by(id_uc) %>%
+  summarise(n_moradores=n(),
+            media_idade=mean(V0403,na.rm=T)) %>% 
+  ungroup()
+
 
 ################### 2. Domicilio ################################
 
@@ -91,19 +117,50 @@ MORADOR_2<-MORADOR %>%
 # 2 – Rural 
 
 
-DOMICILIO_2<-DOMICILIO %>%
-  mutate(id_dom=paste0(COD_UPA,"_",NUM_DOM)) %>%
-  mutate(rede_geral=ifelse(V02141==1, "Sim", "Não")) %>%
-  mutate(outra_origem=ifelse(V02142==1, "Sim", "Não")) %>%
-  mutate(energia_integral=ifelse(V0215==1, "Sim", "Não")) %>%
-  mutate(loc_dom=case_when(
-    TIPO_SITUACAO_REG==1 ~ "Urbano",
-    TIPO_SITUACAO_REG==2 ~ "Rural"
-  )) %>%
-  select(id_dom, UF,rede_geral, outra_origem, energia_integral,loc_dom)
+# V0217	Este domicílio é:	
+# 1 – Próprio de algum morador – já pago
+# 2 – Próprio de algum morador – ainda pagando
+# 3 – Alugado
+# 4 – Cedido por empregador
+# 5 – Cedido por familiar
+# 6 – Cedido de outra forma
+# 7 – Outra condição
 
 
+# V0201	Este domicílio é do tipo:
+# 1 – Casa
+# 2 – Apartamento
+# 3 – Habitação em casa de cômodos, cortiço ou cabeça de porco
 
+
+DOMICILIO_2 <- DOMICILIO %>%
+  mutate(id_dom = paste0(COD_UPA, "_", NUM_DOM)) %>%
+  mutate(
+    rede_geral       = ifelse(V02141 == 1, "Sim", "Não"),
+    outra_origem     = ifelse(V02142 == 1, "Sim", "Não"),
+    energia_integral = ifelse(V0215 == 1, "Sim", "Não"),
+    loc_dom = case_when(
+      TIPO_SITUACAO_REG == 1 ~ "Urbano",
+      TIPO_SITUACAO_REG == 2 ~ "Rural"
+    ),
+    tipo_dom = case_when(
+      V0201 == 1 ~ "Casa",
+      V0201 == 2 ~ "Apartamento",
+      V0201 == 3 ~ "Habitação em cômodos / cortiço / cabeça de porco",
+      TRUE       ~ NA_character_
+    ),
+    cond_ocup = case_when(
+      V0217 == 1 ~ "Próprio – já pago",
+      V0217 == 2 ~ "Próprio – ainda pagando",
+      V0217 == 3 ~ "Alugado",
+      V0217 == 4 ~ "Cedido por empregador",
+      V0217 == 5 ~ "Cedido por familiar",
+      V0217 == 6 ~ "Cedido de outra forma",
+      V0217 == 7 ~ "Outra condição",
+      TRUE       ~ NA_character_
+    )
+  ) %>%
+  select(id_dom, UF, rede_geral, outra_origem, energia_integral, loc_dom, tipo_dom, cond_ocup)
 
 ################### 3. Despesas Coletivas ################################
 
@@ -136,7 +193,7 @@ DESPESA_COLETIVA_2 <- DESPESA_COLETIVA %>%
                                  (V8000_DEFLA*FATOR_ANUALIZACAO)
     ),
     inss_anual=(V1904_DEFLA*V9011*FATOR_ANUALIZACAO)) %>% 
-group_by(id_uc) %>%
+  group_by(id_uc) %>%
   summarise(
     despesa_coletiva = sum(V8000_DEFLA_anual, na.rm = TRUE),
     despesa_energia=sum(V8000_DEFLA_anual[V9001==600101],na.rm=T),
@@ -249,14 +306,14 @@ base_final <- MORADOR_2 %>%
   left_join(RENDIMENTO_TRABALHO_2, by = "id_uc") %>%
   left_join(OUTROS_RENDIMENTOS_2, by = "id_uc") %>%
   left_join(CADERNETA_COLETIVA_2, by = "id_uc") %>%
-  left_join(ALUGUEL_ESTIMADO_2, by = "id_uc")
+  left_join(ALUGUEL_ESTIMADO_2, by = "id_uc") %>%
+  left_join(MORADOR_3, by = "id_uc")
 
 
 
 
 
 base_final <- base_final %>% 
-  mutate(preco_kwh = despesa_energia/quantidade_kws) %>% 
   
   # 1. Transformar despesas anuais em mensais
   mutate(
@@ -274,7 +331,7 @@ base_final <- base_final %>%
     gastos_totais = sum(despesa_coletiva, caderneta_coletiva, aluguel, despesa_individual, na.rm = TRUE)
   ) %>% 
   ungroup() %>% 
-  mutate()
+  mutate(preco_kwh = despesa_energia/quantidade_kws) 
 
 
 salario_minimo <- 954

@@ -14,20 +14,26 @@ rm(list=ls())
 gc()
 
 
+
+################# 1. Preparar Base de Dados ##################
+
+
+options(survey.lonely.psu = "adjust")  
+
+
 base_final<-read_csv("data/clean/base_final.csv")
 
-
-# Grupos
-colunas_grupos <- c(
-  "rural", "urbano",
-  "mulher_negra_renda_media", "homem_branco_renda_media", "homem_branco_renda_alta",  "mulher_branca_renda_alta"
+design_complete <- svydesign(
+  ids = ~COD_UPA,
+  strata = ~ESTRATO_POF,
+  weights = ~PESO_FINAL,
+  data = base_final ,
+  nest = TRUE
 )
 
-################# regressao ##################
 
-base_final <- base_final
 
-# Remover casos problemáticos
+#remover familiar com menos de meio salario minimo per capita
 base_final2 <- base_final %>%
   filter(despesa_energia > 0, RENDA_DISP_PC > 0, preco_kwh > 0) %>% 
   filter(is.na(quantidade_kws_NI)==F&quantidade_kws_NI>0) %>% 
@@ -35,44 +41,50 @@ base_final2 <- base_final %>%
   mutate(UF=as.factor(UF))
 
 
-
 design <- svydesign(
   ids = ~COD_UPA,
   strata = ~ESTRATO_POF,
   weights = ~PESO_FINAL,
-  data = base_final2,
+  data = base_final2 ,
   nest = TRUE
 )
 
+################# 2. Rodar modelo Geral ##################
 
-options(survey.lonely.psu = "adjust")
+
+svymean(~preco_kwh, design = design_complete, na.rm = TRUE)
+
+modelo <- svyglm(
+  log(quantidade_kws_NI) ~ log(preco_kwh)+log(RENDA_DISP_PC)+ANOS_ESTUDO+n_moradores+media_idade+cond_ocup+loc_dom,
+  design = design
+)
+
+summary(modelo)
+
+################# 3. Rodar modelos para grupos ##################
 
 
-subgrupos <- c(
+# para grupos sexo + renda
+
+resultados1 <- purrr::map_dfr(c(
   "mulher_negra_renda_media",
   "homem_branco_renda_media",
   "homem_branco_renda_alta",
-  "mulher_branca_renda_alta",
-  "rural",
-  "urbano"
-)
-
-
-# Criar lista de modelos e elasticidades
-resultados <- purrr::map_dfr(subgrupos, function(grupo_nome) {
+  "mulher_branca_renda_alta"
+), function(grupo_nome) {
   
   # Filtrar o subgrupo
   sub_design <- subset(design, get(grupo_nome) == TRUE)
   
   # Rodar o modelo simples
   modelo <- svyglm(
-    log(quantidade_kws_NI) ~ log(preco_kwh)+UF+RENDA_DISP_PC,
+    log(quantidade_kws_NI) ~ log(preco_kwh)+log(RENDA_DISP_PC)+ANOS_ESTUDO+n_moradores+media_idade+cond_ocup+loc_dom,
     design = sub_design
   )
   
   # Extrair elasticidade (coeficiente)
   coef_est <- coef(modelo)["log(preco_kwh)"]
-  se_est   <- sqrt(vcov(modelo)["log(preco_kwh)", "log(preco_kwh)"])
+  se_est   <- coef(summary(modelo))[, "Std. Error"]["log(preco_kwh)"]
   ic_low   <- coef_est - 1.96 * se_est
   ic_high  <- coef_est + 1.96 * se_est
   
@@ -88,7 +100,43 @@ resultados <- purrr::map_dfr(subgrupos, function(grupo_nome) {
 
 
 
-resultados <- resultados %>%
+resultados2 <- purrr::map_dfr(c(
+  "rural",
+  "urbano"
+), function(grupo_nome) {
+  
+  # Filtrar o subgrupo
+  sub_design <- subset(design, get(grupo_nome) == TRUE)
+  
+  # Rodar o modelo simples
+  modelo <- svyglm(
+    log(quantidade_kws_NI) ~ log(preco_kwh)+log(RENDA_DISP_PC)+ANOS_ESTUDO+n_moradores+media_idade+cond_ocup+sexo+raca,
+    design = sub_design
+  )
+  
+  # Extrair elasticidade (coeficiente)
+  coef_est <- coef(modelo)["log(preco_kwh)"]
+  se_est   <- coef(summary(modelo))[, "Std. Error"]["log(preco_kwh)"]
+  ic_low   <- coef_est - 1.96 * se_est
+  ic_high  <- coef_est + 1.96 * se_est
+  
+  # Voltar como tibble
+  tibble(
+    grupo = grupo_nome,
+    elasticidade = coef_est,
+    se = se_est,
+    ic_inf = ic_low,
+    ic_sup = ic_high
+  )
+})
+
+
+
+################# 4. Base de Dados e Grafico ##################
+
+
+
+resultados <-  bind_rows(resultados1, resultados2) %>%
   mutate(
     grupo_label = case_when(
       grupo == "homem_branco_renda_baixa" ~ "Homem branco (renda baixa)",
@@ -111,11 +159,22 @@ resultados <- resultados %>%
     ))
   )
 
-resultados
+
+
+
 ggplot(resultados, aes(x = grupo_label, y = elasticidade)) +
   geom_col(fill = "steelblue") +
   geom_errorbar(aes(ymin = ic_inf, ymax = ic_sup), width = 0.2) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
+  # Rótulos de elasticidade dentro das barras
+  geom_text(
+    aes(label = sprintf("%.2f", elasticidade)),
+    vjust = 2, # 
+    hjust = -2, # ajusta posição
+    color = "black",
+    fontface = "bold",
+    size = 3.5
+  ) +
   labs(
     title = "Elasticidade-preço da demanda por energia elétrica",
     x = NULL,
@@ -126,26 +185,23 @@ ggplot(resultados, aes(x = grupo_label, y = elasticidade)) +
 
 ggsave("output/elasticidades.png", width = 8, height = 6)
 
+################# 4. Tabelas com as Infos ##################
 
-design_complete <- svydesign(
-  ids = ~COD_UPA,
-  strata = ~ESTRATO_POF,
-  weights = ~PESO_FINAL,
-  data = base_final,
-  nest = TRUE
+
+colunas_grupos <- c(
+  "mulher_negra_renda_media",
+  "homem_branco_renda_media",
+  "homem_branco_renda_alta",
+  "mulher_branca_renda_alta",
+  "rural",
+  "urbano"
 )
-names(base_final)
-
-
-
-
 
 stats <- map_dfr(colunas_grupos, function(var) {
   subdesign <- subset(design_complete, get(var) == TRUE & !is.na(quantidade_kws))
   resultado1 <- svymean(~quantidade_kws, subdesign, na.rm = TRUE)
   resultado2 <- svymean(~RENDA_DISP_PC, subdesign, na.rm = TRUE)
   resultado3 <- svymean(~gastos_habitacao, subdesign, na.rm = TRUE)
-  resultado4 <- svymean(~contas_casa, subdesign, na.rm = TRUE)
   total_fam    <- svytotal(~I(!is.na(gastos_totais)), subdesign)  # ponderado
   
   tibble(
@@ -153,7 +209,6 @@ stats <- map_dfr(colunas_grupos, function(var) {
     media_kwh = as.numeric(coef(resultado1)),
     media_renda = as.numeric(coef(resultado2)),
     media_gastos = as.numeric(coef(resultado3)),
-    media_contas = as.numeric(coef(resultado4)),
     n_familias = as.numeric(coef(total_fam)[[2]])
   )
 })
@@ -177,8 +232,8 @@ names(stats)
 ###################### Impacto tarifario #####################################
 
 
-
 p<-0.7
+
 tarifa_vermelha_2<-0.07877
 
 vermelha_2<-stats %>% 

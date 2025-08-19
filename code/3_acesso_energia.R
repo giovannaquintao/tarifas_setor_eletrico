@@ -23,7 +23,7 @@ gc()
 # 3 – Outra frequência
 
 
-options(survey.lonely.psu = "adjust")  # ou "certainty", "remove", "average"
+options(survey.lonely.psu = "adjust")  
 
 
 ################### 1. Calculating average ################################
