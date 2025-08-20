@@ -237,7 +237,7 @@ p<-0.7
 tarifa_vermelha_2<-0.07877
 
 vermelha_2<-stats %>% 
-  select(grupo,grupo_label,categoria,media_kwh,media_renda,media_gastos,media_contas,elasticidade,n_familias) %>% 
+  select(grupo,grupo_label,categoria,media_kwh,media_renda,media_gastos,elasticidade,n_familias) %>% 
   mutate(preco=p) %>% 
   mutate(preco_novo=preco+tarifa_vermelha_2) %>% 
   mutate(pct_aumento_preco=100*tarifa_vermelha_2/p)%>% 
@@ -263,7 +263,7 @@ tarifa_vermelha_1<-0.04463
 
 
 vermelha_1<-stats %>% 
-  select(grupo,grupo_label,categoria,media_kwh,media_renda,media_gastos,media_contas,elasticidade) %>% 
+  select(grupo,grupo_label,categoria,media_kwh,media_renda,media_gastos,elasticidade) %>% 
   mutate(preco=p) %>% 
   mutate(preco_novo=preco+tarifa_vermelha_1) %>% 
   mutate(pct_aumento_preco=100*tarifa_vermelha_1/p)%>% 
@@ -290,7 +290,7 @@ vermelha_1<-vermelha_1 %>%
 tarifa_amarela<-0.01885
 
 amarela<-stats %>% 
-  select(grupo,grupo_label,categoria,media_kwh,media_renda,media_gastos,media_contas,elasticidade) %>% 
+  select(grupo,grupo_label,categoria,media_kwh,media_renda,media_gastos,elasticidade) %>% 
   mutate(preco=p) %>% 
   mutate(preco_novo=preco+tarifa_amarela) %>% 
   mutate(pct_aumento_preco=100*tarifa_amarela/p)%>% 
@@ -407,7 +407,7 @@ impacto %>%
 
 ggsave("output/impact_vermelha_2.png", width = 8, height = 6)
 
-##################### tabela impacto ####################################
+##################### Impacto Gastos e Renda ####################################
 
 table_impacto <- impacto %>% 
   select(grupo_label, categoria, starts_with("pct_dif_renda"), starts_with("pct_dif_gastos")) %>% 
@@ -492,24 +492,18 @@ doc <- read_docx() %>%
 print(doc, target = "output/tabela_impacto_bandeira_completa.docx")
 
 
-##################### absoluto familias #####################
+##################### Impacto Absoluto #####################
 
 absoluto <- impacto %>% 
   select(grupo_label, categoria,n_familias, starts_with("abs_dif"))
 
-names(absoluto)
+
 absoluto<-absoluto %>% 
   mutate(total_perdido=1*abs_dif_vermelha_1+1*abs_dif_vermelha_2+2*abs_dif_amarela) %>% 
   mutate(montante=(n_familias*total_perdido)/10^6) %>% 
   select(-starts_with("abs"))
 
 
-
-library(dplyr)
-library(flextable)
-library(officer)
-
-# Organizar tabela
 df_tab <- absoluto %>%
   arrange(categoria) %>%
   rename(
@@ -548,6 +542,7 @@ ft <- flextable(df_fmt) %>%
   font(fontname = "Times New Roman", part = "all") %>%
   fontsize(size = 11, part = "all") %>%
   padding(padding = 0, part = "all")
+
 ft
 # Exportar para Word
 doc <- read_docx() %>%
