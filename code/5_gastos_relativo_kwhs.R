@@ -7,22 +7,22 @@ rm(list=ls())
 gc()
 
 
+################### 1. Calculating average ################################
+
 base_final<-read_csv("data/clean/base_final.csv")
 
-mean(base_final$RENDA_TOTAL)
-names(base_final)
+
+#remove missings
 base_final<-base_final %>% 
   filter(is.na(despesa_energia)==F&despesa_energia>0&RENDA_TOTAL>0) %>% 
   mutate(pct_energia_consumo=despesa_energia/gastos_habitacao,
          pct_energia_renda=despesa_energia/RENDA_TOTAL)
 
-mean(base_final$despesa_energia, na.rm = TRUE)
-mean(base_final$RENDA_TOTAL, na.rm = TRUE)
-mean(base_final$pct_energia_renda, na.rm = TRUE)
-options(survey.lonely.psu = "adjust")  # ou "certainty", "remove", "average"
+
+options(survey.lonely.psu = "adjust")  
 # Grupos
 colunas_grupos <- c(
-  "homem_ref", "mulher_ref", "homem_negro_ref", "mulher_negra_ref", 
+ "homem_negro_ref", "mulher_negra_ref", 
   "homem_branco_ref", "mulher_branca_ref",
   "renda_pc_ate_05", "renda_pc_05a3", "renda_pc_mais3", "rural", "urbano",
   "mulher_negra_renda_media", "homem_branco_renda_media", "homem_branco_renda_alta",  "mulher_branca_renda_alta"
@@ -43,11 +43,12 @@ resultado2 <- svymean(~pct_energia_renda, design, na.rm = TRUE)
 
 resultado1
 resultado2
-##################### gasto kws ######################
+
+
 
 stats <- map_dfr(colunas_grupos, function(var) {
   # subset com a condição do grupo == TRUE
-  subdesign <- subset(design, get(var) == TRUE & !is.na(gastos_totais))
+  subdesign <- subset(design, get(var) == TRUE)
   
   # calcular média e erro padrão
   resultado1 <- svymean(~pct_energia_consumo, subdesign, na.rm = TRUE)
@@ -75,7 +76,9 @@ stats <- map_dfr(colunas_grupos, function(var) {
   
   
 })
-# Criar labels bonitos
+
+
+################### 2. Generating Table  ################################
 stats <- stats %>%
   mutate(
     ic_lower_g = media_consumo - 1.96 * erro_padrao_g,
@@ -113,8 +116,7 @@ stats <- stats %>%
   select(grupo_label,categoria,starts_with("media"),starts_with("ic"))
 
 
-# Supondo que o seu dataframe se chama "df"
-# Primeiro, transformamos para formato longo
+
 df_long <- stats %>%
   pivot_longer(cols = c(media_consumo, media_renda),
                names_to = "variavel", values_to = "media") %>%
@@ -125,15 +127,21 @@ df_long <- stats %>%
                            "media_renda" = "Gasto Energia sobre Renda Total (%)"))
 
 
+################### 3. Generating Graphs ################################
+
 k<-df_long %>% filter(categoria == "Renda") %>% 
   mutate(grupo_label = fct_reorder(grupo_label, media, .desc = TRUE))
 
-k
+
 ggplot(k)+ 
-aes(x = grupo_label, y = media, fill = variavel) +
+  aes(x = grupo_label, y = media, fill = variavel) +
   geom_col(position = position_dodge(width = 0.8)) +
   geom_errorbar(aes(ymin = ic_lower, ymax = ic_upper),
                 position = position_dodge(width = 0.8), width = 0.2) +
+  geom_text(aes(label = scales::percent(media, accuracy = 0.1)),
+            vjust = 4,            # empurra o texto para dentro da barra
+            color = "black" ,
+            size = 3.6) +
   facet_wrap(~variavel, scales = "free_y") +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   scale_fill_brewer(palette = "Set2") +
@@ -150,14 +158,18 @@ ggsave("output/renda_consumo_relativo.png", width = 8, height = 6)
 k<-df_long %>% filter(categoria == "Localidade") %>% 
   mutate(grupo_label = fct_reorder(grupo_label, media, .desc = TRUE))
 
-k
+
 
 ggplot(k)+ 
-       aes(x = grupo_label, y = media, fill = variavel) +
+  aes(x = grupo_label, y = media, fill = variavel) +
   geom_col(position = position_dodge(width = 0.8)) +
   geom_errorbar(aes(ymin = ic_lower, ymax = ic_upper),
                 position = position_dodge(width = 0.8), width = 0.2) +
   facet_wrap(~variavel, scales = "free_y") +
+  geom_text(aes(label = scales::percent(media, accuracy = 0.1)),
+            vjust = 4,             # empurra o texto para dentro da barra
+            color = "black" ,
+            size = 3.6) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   scale_fill_brewer(palette = "Set2") +
   labs(x = NULL, y = NULL, fill = NULL) +
@@ -169,7 +181,7 @@ ggplot(k)+
 
 ggsave("output/localidade_consumo_relativo.png", width = 8, height = 6)
 
-k
+
 genero_raca <- df_long %>%
   filter(categoria == "Gênero/Raça") %>%
   filter(!grupo_label%in%c("Homem ","Mulher ")) %>% 
@@ -189,6 +201,10 @@ ggplot(genero_raca %>%
   geom_errorbar(aes(ymin = ic_lower, ymax = ic_upper),
                 position = position_dodge(width = 0.8), width = 0.2) +
   facet_wrap(~variavel, scales = "free_y") +
+  geom_text(aes(label = scales::percent(media, accuracy = 0.1)),
+            vjust = 5,           # empurra o texto para dentro da barra
+            color = "black" ,
+            size = 3.6) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   scale_fill_brewer(palette = "Set2") +
   scale_alpha_manual(values = c("Mulher" = 1, "Homem" = 0.6)) +
@@ -202,7 +218,6 @@ ggplot(genero_raca %>%
 ggsave("output/genero_consumo_relativo.png", width = 8, height = 6)
 
 
-names(df_long)
 genero_raca_renda <- df_long %>%
   filter(categoria == "Renda/Gênero/Raça") %>%
   filter(!grupo_label%in%c("Homem ","Mulher ")) %>% 
@@ -213,7 +228,7 @@ genero_raca_renda <- df_long %>%
       TRUE ~ "Ambos"
     ))
 
-genero_raca_renda
+
 ggplot(genero_raca_renda %>% 
          mutate(grupo_label = fct_reorder(grupo_label, media, .desc = TRUE)), 
        aes(x = grupo_label, y = media, fill = variavel, alpha = sexo)) +
@@ -221,6 +236,10 @@ ggplot(genero_raca_renda %>%
   geom_errorbar(aes(ymin = ic_lower, ymax = ic_upper),
                 position = position_dodge(width = 0.8), width = 0.2) +
   facet_wrap(~variavel, scales = "free_y") +
+  geom_text(aes(label = scales::percent(media, accuracy = 0.1)),
+            vjust = 4,          # empurra o texto para dentro da barra
+            color = "black" ,
+            size = 3.6) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   scale_fill_brewer(palette = "Set2") +
   scale_alpha_manual(values = c("Mulher" = 1, "Homem" = 0.6)) +
@@ -232,4 +251,5 @@ ggplot(genero_raca_renda %>%
 
 
 ggsave("output/genero_raca_renda_consumo_relativo.png", width = 9, height = 6)
+
 

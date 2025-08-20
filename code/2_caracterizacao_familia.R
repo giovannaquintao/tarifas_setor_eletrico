@@ -1,24 +1,23 @@
-
-library(tidyverse)
-library(survey)
-library(kableExtra)
+# Fazer tabela de caracterização das famílias
 
 rm(list=ls())
 gc()
+
+
+
 library(tidyverse)
 library(survey)
 library(flextable)
 library(officer)
 library(purrr)
 
+
+
+################### 1. Calculating average ################################
+
 # Ler base
 base_final <- read_csv("data/clean/base_final.csv")
 
-# Calcular gastos com habitação (mensal)
-base_final <- base_final %>%
-  rowwise() %>%
-  mutate(gastos_hab = sum(despesa_coletiva, aluguel, na.rm = TRUE) / 12) %>%
-  ungroup()
 
 # Plano amostral
 design <- svydesign(
@@ -39,8 +38,10 @@ colunas_grupos <- c(
   "mulher_negra_renda_media", "homem_branco_renda_media", "homem_branco_renda_alta",  "mulher_branca_renda_alta"
 )
 
+#checar numero de familias - cerca de 72 milhoes
+
 n_familias   <- svytotal(~I(!is.na(gastos_totais)), design)  # ponderado
-coef(n_familias)[2]
+coef(n_familias)[2] /1000000
 
 
 
@@ -50,7 +51,7 @@ stats <- map_dfr(colunas_grupos, function(var) {
   
   media_gastos <- svymean(~gastos_totais, subdesign, na.rm = TRUE)
   media_renda  <- svymean(~RENDA_DISP_PC, subdesign, na.rm = TRUE)
-  media_hab    <- svymean(~gastos_hab, subdesign, na.rm = TRUE)
+  media_hab    <- svymean(~gastos_habitacao, subdesign, na.rm = TRUE)
   total_fam    <- svytotal(~I(!is.na(gastos_totais)), subdesign)  # ponderado
   
   tibble(
@@ -112,9 +113,10 @@ stats<-stats %>%
 stats<-stats %>% 
   mutate(pct_hab=100*media_gastos_hab/media_gastos_g)%>% 
   mutate(pct_renda_pc=100*media_gastos_hab/media_renda_g)
-# ======================
-# FLEXTABLE PARA WORD
-# ======================
+
+
+################### 2. Creating Table ################################
+
 
 # 1. Organizar base
 df_tab <- stats %>%

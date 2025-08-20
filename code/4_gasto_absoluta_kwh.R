@@ -92,7 +92,7 @@ df_fmt <- stats %>%
     separador <- tibble(
       Categoria = cat_name,
       Grupo = paste0("▸ ", cat_name),
-      `Consumo médio de energia (kWh)` = NA,
+      `Consumo médio de energia mensal (kWh)` = NA,
       `CV (%)` = NA
     )
     bind_rows(separador, .x)

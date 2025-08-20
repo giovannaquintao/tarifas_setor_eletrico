@@ -1,3 +1,4 @@
+#Fazer tabela com descricao do acesso a energia
 
 library(tidyverse)
 library(survey)
@@ -10,26 +11,35 @@ rm(list=ls())
 gc()
 
 
-base_final<-read_csv("data/clean/base_final.csv")
 
-names(base_final)
-table(base_final$rede_geral)
-table(base_final$outra_origem)
+# 
+# A energia elétrica utilizada neste domicílio é proveniente de rede geral?	1 – Sim
+# 2 – Não
+# A energia elétrica utilizada neste domicílio é proveniente de outra origem (gerador, placa solar, eólica, etc.)?	1 – Sim
+# 2 – Não
+# Com que frequência a energia elétrica, proveniente de rede geral, está habitualmente disponível para este domicílio?	Branco – Não Aplicável
+# 1 – Diária, em tempo integral
+# 2 – Diária, por algumas horas
+# 3 – Outra frequência
+
+
+options(survey.lonely.psu = "adjust")  
+
+
+################### 1. Calculating average ################################
+
+base_final<-read_csv("data/clean/base_final.csv")
 
 
 
 base_final<-base_final %>% 
-mutate(rede_geral=ifelse(rede_geral=="Sim",1,0)) %>% 
-mutate(energia_integral=ifelse(energia_integral=="Sim",1,0)) %>% 
-mutate(outra_origem=ifelse(outra_origem=="Sim",1,0)) 
-table(base_final$rede_geral)
-table(base_final$outra_origem)
-
-table(base_final$energia_integral)
+  mutate(rede_geral=ifelse(rede_geral=="Sim",1,0)) %>% 
+  mutate(energia_integral=ifelse(energia_integral=="Sim",1,0)) %>% 
+  mutate(outra_origem=ifelse(outra_origem=="Sim",1,0)) 
 
 
-options(survey.lonely.psu = "adjust")  # ou "certainty", "remove", "average"
 
+#survey design
 design <- svydesign(
   id = ~COD_UPA,
   strata = ~ESTRATO_POF,
@@ -37,6 +47,8 @@ design <- svydesign(
   data = base_final,
   nest = TRUE
 )
+
+
 # Grupos
 colunas_grupos <- c(
   "homem_ref", "mulher_ref", "homem_negro_ref", "mulher_negra_ref", 
@@ -44,16 +56,13 @@ colunas_grupos <- c(
   "renda_pc_ate_05", "renda_pc_05a3", "renda_pc_mais3", "rural", "urbano",
   "mulher_negra_renda_media", "homem_branco_renda_media", "homem_branco_renda_alta",  "mulher_branca_renda_alta"
 )
+
+
 resultado1 <- svymean(~rede_geral, design, na.rm = TRUE)
 resultado2 <- svymean(~energia_integral, design, na.rm = TRUE)
 resultado3 <- svymean(~outra_origem, design, na.rm = TRUE)
 
 
-resultado1
-
-resultado2
-
-resultado3
 
 stats <- map_dfr(colunas_grupos, function(var) {
   # subset com a condição do grupo == TRUE
@@ -94,7 +103,6 @@ stats <- map_dfr(colunas_grupos, function(var) {
 })
 
 # Adicionar categorias e labels
-# Adicionar categorias e labels
 stats <- stats %>%
   mutate(
     categoria = case_when(
@@ -127,9 +135,11 @@ stats <- stats %>%
   )
 
 
-names(stats)
 
-# 1. Preparar a base com nomes bonitos
+################### 2. Table ################################
+
+
+# 1. Preparar a base 
 df_tab <- stats %>%
   select(categoria, grupo_label, 
          media_rede_geral, coef_var_perc_g,
@@ -189,14 +199,4 @@ doc
 print(doc, target = "output/tabela_fontes_energias.docx")
 
 
-
-# 
-# A energia elétrica utilizada neste domicílio é proveniente de rede geral?	1 – Sim
-# 2 – Não
-# A energia elétrica utilizada neste domicílio é proveniente de outra origem (gerador, placa solar, eólica, etc.)?	1 – Sim
-# 2 – Não
-# Com que frequência a energia elétrica, proveniente de rede geral, está habitualmente disponível para este domicílio?	Branco – Não Aplicável
-# 1 – Diária, em tempo integral
-# 2 – Diária, por algumas horas
-# 3 – Outra frequência
 
