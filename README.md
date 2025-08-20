@@ -24,6 +24,6 @@ https://www.ibge.gov.br/estatisticas/sociais/saude/24786-pesquisa-de-orcamentos-
    - R (versão X ou superior)  
    - Pacotes R como `tidyverse`, `survey`, 
 
-2. Faça o download dos microdados da POF 2017-2018 no site do IBGE e salve-os localmente na pasta `data/` (por exemplo, `POF_2017_2018_microdados.csv`).
+2. Faça o download dos microdados da POF 2017-2018 no site do IBGE e salve-os localmente .
 
 3. Execute os scripts do diretório `code/` na ordem para gerar os outputs
