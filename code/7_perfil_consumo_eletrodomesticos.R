@@ -1,19 +1,28 @@
 
 library(tidyverse)
 library(survey)
-library(kableExtra)
+library(scales)
 library(flextable)
 library(officer)
+library(dplyr)
+library(purrr)
+library(tibble)
+
 rm(list=ls())
+
+
 gc()
 
 
 
+################# 1. Preparar Base de Dados ##################
+
+
+options(survey.lonely.psu = "adjust")  
+
+
 base_final<-read_csv("data/clean/base_final.csv")
 
-
-# 1. Ajuste de plano amostral
-options(survey.lonely.psu = "adjust")
 
 design <- svydesign(
   id = ~COD_UPA,
@@ -33,18 +42,31 @@ colunas_grupos <- c(
   "mulher_negra_renda_baixa", "mulher_negra_renda_media", "mulher_negra_renda_alta",
   "mulher_branca_renda_baixa", "mulher_branca_renda_media", "mulher_branca_renda_alta"
 )
-# 3. Calcular média e erro padrão para quantidade_kws
-stats <- map_dfr(colunas_grupos, function(var) {
-  subdesign <- subset(design, get(var) == TRUE & !is.na(quantidade_kws))
-  resultado <- svymean(~quantidade_kws, subdesign, na.rm = TRUE)
+
+names(base_final)
+# Variáveis de bens a medir
+vars_bens <- c(
+  "ar_cond","geladeira","microondas","chuveiro",
+  "lavar_roupa","lavar_louca","computadores","televisores"
+)
+
+stats <- map_dfr(colunas_grupos, function(g){
+  # subset por grupo (dummies lógicas: TRUE/FALSE)
+  subd <- subset(design, get(g) == TRUE)
+  
+  # svymean em todas as variáveis de uma vez
+  fml <- as.formula(paste0("~", paste(vars_bens, collapse = " + ")))
+  est <- svymean(fml, subd, na.rm = TRUE)
   
   tibble(
-    grupo = var,
-    media_kwh = as.numeric(coef(resultado)),
-    erro_padrao = as.numeric(SE(resultado)),
-    coef_var_perc = 100 * erro_padrao / media_kwh
+    grupo          = g,
+    variavel       = names(coef(est)),
+    media          = as.numeric(coef(est)),
+    erro_padrao    = as.numeric(SE(est)),
+    coef_var_perc  = 100 * erro_padrao / pmax(media, .Machine$double.eps)
   )
 })
+
 
 stats <- stats %>%
   mutate(
@@ -89,60 +111,59 @@ stats <- stats %>%
     )
   )
 
-stats2 <- stats %>%
-  arrange(categoria) %>%
-  select(categoria, grupo_label, media_kwh, coef_var_perc) %>%
-  rename(
-    Categoria = categoria,
-    Grupo = grupo_label,
-    `Consumo médio de energia mensal (kWh)` = media_kwh,
-    `CV (%)` = coef_var_perc
-  ) 
+names(stats)
+stats<-stats %>% 
+  select(categoria,grupo_label,variavel,media,coef_var_perc) 
 
-write_xlsx(stats2,"output/gasto_absoluto_energia.xlsx")
+stats2<-stats%>% 
+  mutate(percentual=100*media) %>% 
+  select(-media) %>% 
 
-# 5. Formatar tabela
-df_fmt <- stats %>%
-  arrange(categoria) %>%
-  select(categoria, grupo_label, media_kwh, coef_var_perc) %>%
-  rename(
-    Categoria = categoria,
-    Grupo = grupo_label,
-    `Consumo médio de energia mensal (kWh)` = media_kwh,
-    `CV (%)` = coef_var_perc
-  ) %>%
-  group_by(Categoria) %>%
-  group_split() %>%
-  map_dfr(~{
-    cat_name <- unique(.x$Categoria)
-    separador <- tibble(
-      Categoria = cat_name,
-      Grupo = paste0("▸ ", cat_name),
-      `Consumo médio de energia mensal (kWh)` = NA,
-      `CV (%)` = NA
-    )
-    bind_rows(separador, .x)
-  }) %>%
-  ungroup() %>%
-  select(-Categoria) %>%
-  mutate(across(where(is.numeric), ~ round(., 1)))
+  filter(categoria=="Renda/Gênero/Raça") %>% 
+  select(-categoria) %>% 
+  pivot_wider(
+    id_cols    = grupo_label,
+    names_from = variavel,
+    values_from = c(percentual, coef_var_perc),
+    names_glue = "{.value}_{variavel}")
+ord <- names(stats2) %>%
+  {\(.) .[str_detect(., "^percentual_")]}() %>%
+  str_remove("^percentual_")
+
+# constrói a ordem intercalando média e CV(%) para cada variável
+col_order <- c(
+  "grupo_label",
+  as.vector(rbind(paste0("percentual_", ord),
+                  paste0("coef_var_perc_", ord)))
+)
+
+# reordena
+stats2 <- stats2 %>% select(all_of(col_order))
 
 
 
-# 6. Flextable
-ft <- flextable(df_fmt) %>%
-  bold(i = grepl("▸", df_fmt$Grupo), bold = TRUE) %>%
-  align(align = "left", part = "all") %>%
-  autofit() %>%
-  set_table_properties(layout = "autofit")%>%
-  font(fontname = "Times New Roman", part = "all") %>%
-  fontsize(size = 11, part = "all")%>%
-  padding(padding = 0, part = "all") 
+# 2) Defina quais são "cozinha" (apenas as que existirem no stats2)
+cozinha_candidatas <- c("geladeira", "microondas", "forno", "lavar_louca")
+vars_cozinha <- intersect(cozinha_candidatas, vars_bens)
 
-ft
-# 7. Exportar para Word
-doc <- read_docx() %>%
-  body_add_par("Tabela: Consumo médio mensal de energia elétrica por grupo de famílias", style = "heading 1") %>%
-  body_add_flextable(ft)
+# 3) Outras variáveis = tudo que não é cozinha
+vars_outros <- setdiff(vars_bens, vars_cozinha)
+col_order_cozinha <- c(
+  "grupo_label",
+  as.vector(rbind(paste0("percentual_", vars_cozinha),
+                  paste0("coef_var_perc_", vars_cozinha)))
+)
 
-print(doc, target = "output/tabela_consumo_kwh.docx")
+col_order_outros <- c(
+  "grupo_label",
+  as.vector(rbind(paste0("percentual_", vars_outros),
+                  paste0("coef_var_perc_", vars_outros)))
+)
+
+stats2_cozinha <- stats2 %>%
+  select(any_of(col_order_cozinha)) %>%
+  arrange(grupo_label)
+
+stats2_outros <- stats2 %>%
+  select(any_of(col_order_outros)) %>%
+  arrange(grupo_label)

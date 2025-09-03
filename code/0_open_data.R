@@ -154,6 +154,22 @@ RENDIMENTO_TRABALHO <-
            , dec="."
   )
 
+
+
+INVENTARIO <- 
+  read.fwf(paste0(address,"/INVENTARIO.txt"),
+           , widths = c(2,4,1,9,2,1,2,2,7,2,
+                        2,4,1,14,14,10
+           )
+           , na.strings=c(" ")
+           , col.names = c("UF", "ESTRATO_POF", "TIPO_SITUACAO_REG",
+                           "COD_UPA", "NUM_DOM", "NUM_UC", "QUADRO",
+                           "SEQ", "V9001", "V9005", "V9002", "V1404",
+                           "V9012", "PESO", "PESO_FINAL","RENDA_TOTAL")
+           , dec="."
+  )   
+
+saveRDS(INVENTARIO, "data/clean/INVENTARIO.rds")
 saveRDS(RENDIMENTO_TRABALHO, "data/clean/RENDIMENTO_TRABALHO.rds")
 saveRDS(OUTROS_RENDIMENTOS, "data/clean/OUTROS_RENDIMENTOS.rds")
 saveRDS(DOMICILIO, "data/clean/DOMICILIO.rds")

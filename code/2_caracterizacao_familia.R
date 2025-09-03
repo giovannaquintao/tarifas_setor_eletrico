@@ -10,7 +10,7 @@ library(survey)
 library(flextable)
 library(officer)
 library(purrr)
-
+library(writexl)
 
 
 ################### 1. Calculating average ################################
@@ -35,7 +35,10 @@ colunas_grupos <- c(
   "homem_ref", "mulher_ref", "homem_negro_ref", "mulher_negra_ref", 
   "homem_branco_ref", "mulher_branca_ref",
   "renda_pc_ate_05", "renda_pc_05a3", "renda_pc_mais3", "rural", "urbano",
-  "mulher_negra_renda_media", "homem_branco_renda_media", "homem_branco_renda_alta",  "mulher_branca_renda_alta"
+  "homem_negro_renda_baixa", "homem_negro_renda_media", "homem_negro_renda_alta",
+  "homem_branco_renda_baixa", "homem_branco_renda_media", "homem_branco_renda_alta",
+  "mulher_negra_renda_baixa", "mulher_negra_renda_media", "mulher_negra_renda_alta",
+  "mulher_branca_renda_baixa", "mulher_branca_renda_media", "mulher_branca_renda_alta"
 )
 
 #checar numero de familias - cerca de 72 milhoes
@@ -71,10 +74,10 @@ stats <- map_dfr(colunas_grupos, function(var) {
 stats <- stats %>%
   mutate(
     categoria = case_when(
-      str_detect(grupo, "mulher_negra_renda_media") ~ "Renda/Gênero/Raça",
-      str_detect(grupo, "homem_branco_renda_media") ~ "Renda/Gênero/Raça",
-      str_detect(grupo, "homem_branco_renda_alta") ~ "Renda/Gênero/Raça",
-      str_detect(grupo, "mulher_branca_renda_alta") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "negra_renda") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "negro_renda") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "branco_renda") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "branca_renda") ~ "Renda/Gênero/Raça",
       grupo %in% c("rural", "urbano") ~ "Localidade",
       str_detect(grupo, "renda") ~ "Renda",
       TRUE ~ "Gênero/Raça"
@@ -91,14 +94,25 @@ stats <- stats %>%
       grupo == "renda_pc_mais3" ~ "Acima de 3 SM per capita",
       grupo == "rural" ~ "Zona rural",
       grupo == "urbano" ~ "Zona urbana",
-      grupo == "mulher_negra_renda_media" ~ "Mulher negra (renda média)",
-      grupo == "homem_branco_renda_media" ~ "Homem branco (renda média)",
-      grupo == "homem_branco_renda_alta" ~ "Homem branco (renda alta)",
-      grupo == "mulher_branca_renda_alta" ~ "Mulher branca (renda alta)",
+      # ---- combinações sexo × raça × renda ----
+      grupo == "homem_negro_renda_baixa"   ~ "Homem negro (renda baixa)",
+      grupo == "homem_negro_renda_media"   ~ "Homem negro (renda média)",
+      grupo == "homem_negro_renda_alta"    ~ "Homem negro (renda alta)",
+      
+      grupo == "homem_branco_renda_baixa"  ~ "Homem branco (renda baixa)",
+      grupo == "homem_branco_renda_media"  ~ "Homem branco (renda média)",
+      grupo == "homem_branco_renda_alta"   ~ "Homem branco (renda alta)",
+      
+      grupo == "mulher_negra_renda_baixa"  ~ "Mulher negra (renda baixa)",
+      grupo == "mulher_negra_renda_media"  ~ "Mulher negra (renda média)",
+      grupo == "mulher_negra_renda_alta"   ~ "Mulher negra (renda alta)",
+      
+      grupo == "mulher_branca_renda_baixa" ~ "Mulher branca (renda baixa)",
+      grupo == "mulher_branca_renda_media" ~ "Mulher branca (renda média)",
+      grupo == "mulher_branca_renda_alta"  ~ "Mulher branca (renda alta)",
       TRUE ~ grupo
     )
   )
-
 
 
 total_fam <- stats %>%
@@ -113,6 +127,8 @@ stats<-stats %>%
 stats<-stats %>% 
   mutate(pct_hab=100*media_gastos_hab/media_gastos_g)%>% 
   mutate(pct_renda_pc=100*media_gastos_hab/media_renda_g)
+
+
 
 
 ################### 2. Creating Table ################################
@@ -137,6 +153,10 @@ df_tab <- stats %>%
     `CV habitação (%)` = coef_var_perc_hab,
     `Nº famílias (% sobre total)` = n_familias2
   )
+
+class(df_tab$`Gasto com habitação (R$)`)
+#salvar xlsx
+write_xlsx(df_tab,"output/consumo_familia.xlsx")
 
 # 2. Adicionar linhas de separação por categoria
 df_fmt <- df_tab %>%

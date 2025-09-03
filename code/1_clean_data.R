@@ -15,7 +15,7 @@ CADERNETA_COLETIVA <- readRDS("data/clean/CADERNETA_COLETIVA.rds")
 ALUGUEL_ESTIMADO <- readRDS("data/clean/ALUGUEL_ESTIMADO.rds")
 OUTROS_RENDIMENTOS <- readRDS("data/clean/OUTROS_RENDIMENTOS.rds")
 RENDIMENTO_TRABALHO <- readRDS("data/clean/RENDIMENTO_TRABALHO.rds")
-
+INVENTARIO <- readRDS("data/clean/INVENTARIO.rds")
 ################### 1. Morador ################################
 
 # V0306	Condição na Unidade de Consumo.
@@ -296,6 +296,80 @@ RENDIMENTO_TRABALHO_2 <- RENDIMENTO_TRABALHO %>%
   )
 
 
+################### 9. Inventario ################################
+
+# ---- Grupos de eletrodomésticos ----
+
+# Ar condicionado / aquecedor
+ar_cond <- c(1402101)
+
+# Geladeira / frigobar
+geladeira <- c(1400301,1400401)
+
+# Freezer
+freezer <- c(1400201)
+#################################
+# Micro-ondas
+microondas <- c(1400901)
+
+# Forno / fogão elétrico
+forno <- c(1401001)
+
+# Máquina de lavar roupa
+lavar_roupa <- c(1401201)
+
+# Máquina de lavar louça
+lavar_louca <- c(1400801)
+
+# Ferro elétrico
+ferro <- c(1401101)
+
+chuveiro<-c(1400501)
+
+# Computadores
+computadores <- c(1401901)
+
+# Televisores
+televisores <- c(1401301,1401401)
+
+
+
+INVENTARIO_2 <- INVENTARIO %>%
+  mutate(
+    ar_cond   = if_else(V9001 %in% ar_cond, 1, 0),
+    geladeira  = if_else(V9001 %in% geladeira, 1, 0),
+    microondas          = if_else(V9001 %in% microondas, 1, 0),
+    chuveiro          = if_else(V9001 %in% chuveiro, 1, 0),
+    forno         = if_else(V9001 %in% forno, 1, 0),
+    lavar_roupa         = if_else(V9001 %in% lavar_roupa, 1, 0),
+    lavar_louca         = if_else(V9001 %in% lavar_louca, 1, 0),
+    ferro               = if_else(V9001 %in% ferro, 1, 0),
+    computadores        = if_else(V9001 %in% computadores, 1, 0),
+    televisores         = if_else(V9001 %in% televisores, 1, 0)
+  )
+
+INVENTARIO_2 <- INVENTARIO_2 %>%
+  mutate(
+    id_dom = paste0(COD_UPA, "_", NUM_DOM),
+    id_uc  = paste0(COD_UPA, "_", NUM_DOM, "_", NUM_UC)
+  ) %>%
+  group_by(id_uc) %>%
+  summarise(
+    ar_cond  = max(ar_cond, na.rm = TRUE),
+    geladeira = max(geladeira, na.rm = TRUE),
+    freezer            = max(freezer, na.rm = TRUE),
+    microondas         = max(microondas, na.rm = TRUE),
+    forno       = max(forno, na.rm = TRUE),
+    chuveiro       = max(chuveiro, na.rm = TRUE),
+    lavar_roupa        = max(lavar_roupa, na.rm = TRUE),
+    lavar_louca        = max(lavar_louca, na.rm = TRUE),
+    ferro              = max(ferro, na.rm = TRUE),
+    computadores       = max(computadores, na.rm = TRUE),
+    televisores        = max(televisores, na.rm = TRUE)
+  ) %>% 
+  ungroup()
+
+
 ################### 9. Bind All################################
 
 
@@ -307,7 +381,9 @@ base_final <- MORADOR_2 %>%
   left_join(OUTROS_RENDIMENTOS_2, by = "id_uc") %>%
   left_join(CADERNETA_COLETIVA_2, by = "id_uc") %>%
   left_join(ALUGUEL_ESTIMADO_2, by = "id_uc") %>%
-  left_join(MORADOR_3, by = "id_uc")
+  left_join(MORADOR_3, by = "id_uc")%>%
+  left_join(INVENTARIO_2, by = "id_uc")
+
 
 
 
@@ -357,10 +433,21 @@ base_final <- base_final %>%
 
 base_final <- base_final %>%
   mutate(
-    mulher_negra_renda_media = mulher_negra_ref & renda_pc_05a3,
-    homem_branco_renda_media = homem_branco_ref & renda_pc_05a3,
-    homem_branco_renda_alta = homem_branco_ref &  renda_pc_mais3,
-    mulher_branca_renda_alta = mulher_branca_ref &  renda_pc_mais3
+    homem_negro_renda_baixa = (sexo == "Homem"  & raca == "Negro"  & renda_pc_ate_05),
+    homem_negro_renda_media = (sexo == "Homem"  & raca == "Negro"  & renda_pc_05a3),
+    homem_negro_renda_alta  = (sexo == "Homem"  & raca == "Negro"  & renda_pc_mais3),
+    
+    homem_branco_renda_baixa = (sexo == "Homem" & raca == "Branco" & renda_pc_ate_05),
+    homem_branco_renda_media = (sexo == "Homem" & raca == "Branco" & renda_pc_05a3),
+    homem_branco_renda_alta  = (sexo == "Homem" & raca == "Branco" & renda_pc_mais3),
+    
+    mulher_negra_renda_baixa = (sexo == "Mulher" & raca == "Negro"  & renda_pc_ate_05),
+    mulher_negra_renda_media = (sexo == "Mulher" & raca == "Negro"  & renda_pc_05a3),
+    mulher_negra_renda_alta  = (sexo == "Mulher" & raca == "Negro"  & renda_pc_mais3),
+    
+    mulher_branca_renda_baixa = (sexo == "Mulher" & raca == "Branco" & renda_pc_ate_05),
+    mulher_branca_renda_media = (sexo == "Mulher" & raca == "Branco" & renda_pc_05a3),
+    mulher_branca_renda_alta  = (sexo == "Mulher" & raca == "Branco" & renda_pc_mais3)
   )
 
 
