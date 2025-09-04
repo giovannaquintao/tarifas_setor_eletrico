@@ -7,6 +7,7 @@ library(officer)
 library(dplyr)
 library(purrr)
 library(tibble)
+library(writexl)
 
 rm(list=ls())
 
@@ -159,7 +160,7 @@ resultados <-  bind_rows(resultados1, resultados2) %>%
     ))
   )
 
-
+write_xlsx(resultados,"output/elasticidades.xlsx")
 
 
 ggplot(resultados, aes(x = grupo_label, y = elasticidade)) +
@@ -322,6 +323,30 @@ amarela_renamed <- amarela %>%
 impacto <- vermelha_1 %>% 
   left_join(vermelha_2, by = "grupo", suffix = c("_vermelha_1", "_vermelha_2")) %>% 
   left_join(amarela_renamed, by = "grupo")
+
+names(impacto)
+excel<-impacto %>% 
+  select(grupo,grupo_label,categoria,n_familias,starts_with("pct_dif"),starts_with("pct_dif_gastos"),starts_with("pct_dif_vermelha")) %>% 
+  mutate(across(where(is.numeric), ~ . * 100)) %>% 
+  rename(
+    # Vermelha 1
+    impacto_perc_renda_vermelha_1   = pct_dif_renda_vermelha_1,
+    impacto_perc_gastos_vermelha_1  = pct_dif_gastos_vermelha_1,
+    perc_dif_gastos_vermelha_1      = pct_dif_vermelha_1,
+    
+    # Vermelha 2
+    impacto_perc_renda_vermelha_2   = pct_dif_renda_vermelha_2,
+    impacto_perc_gastos_vermelha_2  = pct_dif_gastos_vermelha_2,
+    perc_dif_gastos_vermelha_2      = pct_dif_vermelha_2,
+    
+    # Amarela
+    impacto_perc_renda_amarela      = pct_dif_renda_amarela,
+    impacto_perc_gastos_amarela     = pct_dif_gastos_amarela,
+    perc_dif_gastos_amarela         = pct_dif_amarela,
+  )
+
+
+write_xlsx(excel,"output/resultado_impacto_tarifas.xlsx")
 
 
 names(impacto)
@@ -513,6 +538,10 @@ df_tab <- absoluto %>%
     `Gasto anual adicional (R$)` = total_perdido,
     `Gasto anual adicional total (milhões R$)` = montante
   )
+
+
+
+write_xlsx(df_tab,"output/resultado_impacto_tarifas_agregado_montante.xlsx")
 
 # Adicionar linhas de separação por categoria
 df_fmt <- df_tab %>%

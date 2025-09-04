@@ -7,6 +7,7 @@ library(officer)
 library(dplyr)
 library(purrr)
 library(tibble)
+library(writexl)
 
 rm(list=ls())
 
@@ -47,7 +48,7 @@ names(base_final)
 # Variáveis de bens a medir
 vars_bens <- c(
   "ar_cond","geladeira","microondas","chuveiro",
-  "lavar_roupa","lavar_louca","computadores","televisores"
+  "lavar_roupa","forno","computadores","televisores"
 )
 
 stats <- map_dfr(colunas_grupos, function(g){
@@ -63,7 +64,7 @@ stats <- map_dfr(colunas_grupos, function(g){
     variavel       = names(coef(est)),
     media          = as.numeric(coef(est)),
     erro_padrao    = as.numeric(SE(est)),
-    coef_var_perc  = 100 * erro_padrao / pmax(media, .Machine$double.eps)
+    coef_var_perc  = 100 * erro_padrao / media
   )
 })
 
@@ -140,10 +141,10 @@ col_order <- c(
 # reordena
 stats2 <- stats2 %>% select(all_of(col_order))
 
-
+names(base_final)
 
 # 2) Defina quais são "cozinha" (apenas as que existirem no stats2)
-cozinha_candidatas <- c("geladeira", "microondas", "forno", "lavar_louca")
+cozinha_candidatas <- c("geladeira", "microondas", "forno")
 vars_cozinha <- intersect(cozinha_candidatas, vars_bens)
 
 # 3) Outras variáveis = tudo que não é cozinha
@@ -167,3 +168,5 @@ stats2_cozinha <- stats2 %>%
 stats2_outros <- stats2 %>%
   select(any_of(col_order_outros)) %>%
   arrange(grupo_label)
+write_xlsx(stats2_cozinha,"output/consumo_eletrodomesticos_cozinha.xlsx")
+write_xlsx(stats2_outros,"output/consumo_eletrodomesticos_outros.xlsx")
