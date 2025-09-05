@@ -7,6 +7,7 @@ library(officer)
 library(dplyr)
 library(purrr)
 library(tibble)
+library(writexl)
 
 rm(list=ls())
 
@@ -68,9 +69,14 @@ summary(modelo)
 
 resultados1 <- purrr::map_dfr(c(
   "mulher_negra_renda_media",
+  "mulher_negra_renda_alta",
   "homem_branco_renda_media",
   "homem_branco_renda_alta",
-  "mulher_branca_renda_alta"
+  "mulher_branca_renda_media",
+  "mulher_branca_renda_alta",
+  "homem_negro_renda_alta",
+  "homem_negro_renda_media"
+  
 ), function(grupo_nome) {
   
   # Filtrar o subgrupo
@@ -139,30 +145,55 @@ resultados2 <- purrr::map_dfr(c(
 resultados <-  bind_rows(resultados1, resultados2) %>%
   mutate(
     grupo_label = case_when(
-      grupo == "homem_branco_renda_baixa" ~ "Homem branco (renda baixa)",
-      grupo == "mulher_negra_renda_media" ~ "Mulher negra (renda média)",
-      grupo == "homem_branco_renda_media" ~ "Homem branco (renda média)",
-      grupo == "mulher_branca_renda_alta" ~ "Mulher branca (renda alta)",
-      grupo == "homem_branco_renda_alta"  ~ "Homem branco (renda alta)",
+    
+      grupo == "homem_negro_renda_media"   ~ "Homem negro (renda média)",
+      grupo == "homem_negro_renda_alta"    ~ "Homem negro (renda alta)",
+      
+
+      grupo == "homem_branco_renda_media"  ~ "Homem branco (renda média)",
+      grupo == "homem_branco_renda_alta"   ~ "Homem branco (renda alta)",
+      
+
+      grupo == "mulher_negra_renda_media"  ~ "Mulher negra (renda média)",
+      grupo == "mulher_negra_renda_alta"   ~ "Mulher negra (renda alta)",
+      
+  
+      grupo == "mulher_branca_renda_media" ~ "Mulher branca (renda média)",
+      grupo == "mulher_branca_renda_alta"  ~ "Mulher branca (renda alta)",
       grupo == "urbano" ~ "Zona urbana",
       grupo == "rural" ~ "Zona rural",
       TRUE ~ grupo
     ),
     grupo_label = factor(grupo_label, levels = c(
-      "Homem branco (renda baixa)",
+      
       "Mulher negra (renda média)",
-      "Homem branco (renda média)",
+      "Mulher negra (renda alta)",
+      "Mulher branca (renda média)",
       "Mulher branca (renda alta)",
+      "Homem negro (renda média)",
+      "Homem negro (renda alta)",
+      "Homem branco (renda média)",
       "Homem branco (renda alta)",
       "Zona urbana",
       "Zona rural"
     ))
   )
 
+write_xlsx(resultados,"output/elasticidades.xlsx")
 
+focus <- c(
+  "Mulher negra (renda média)",
+  "Homem branco (renda média)",
+  "Mulher branca (renda alta)",
+  "Homem branco (renda alta)",
+  "Zona urbana",
+  "Zona rural"
+)
 
+resultados2<-resultados %>% 
+  filter(grupo_label%in%focus)
 
-ggplot(resultados, aes(x = grupo_label, y = elasticidade)) +
+ggplot(resultados2, aes(x = grupo_label, y = elasticidade)) +
   geom_col(fill = "steelblue") +
   geom_errorbar(aes(ymin = ic_inf, ymax = ic_sup), width = 0.2) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
@@ -190,9 +221,13 @@ ggsave("output/elasticidades.png", width = 8, height = 6)
 
 colunas_grupos <- c(
   "mulher_negra_renda_media",
+  "mulher_negra_renda_alta",
   "homem_branco_renda_media",
   "homem_branco_renda_alta",
+  "mulher_branca_renda_media",
   "mulher_branca_renda_alta",
+  "homem_negro_renda_alta",
+  "homem_negro_renda_media",
   "rural",
   "urbano"
 )
@@ -217,10 +252,10 @@ stats <- map_dfr(colunas_grupos, function(var) {
 stats <- stats %>%
   mutate(
     categoria = case_when(
-      str_detect(grupo, "mulher_negra_renda_media") ~ "Renda/Gênero/Raça",
-      str_detect(grupo, "homem_branco_renda_media") ~ "Renda/Gênero/Raça",
-      str_detect(grupo, "homem_branco_renda_alta") ~ "Renda/Gênero/Raça",
-      str_detect(grupo, "mulher_branca_renda_alta") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "negra_renda") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "negro_renda") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "branco_renda") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "branca_renda") ~ "Renda/Gênero/Raça",
       grupo %in% c("rural", "urbano") ~ "Localidade",
       str_detect(grupo, "renda") ~ "Renda",
       TRUE ~ "Gênero/Raça"
@@ -323,9 +358,36 @@ impacto <- vermelha_1 %>%
   left_join(vermelha_2, by = "grupo", suffix = c("_vermelha_1", "_vermelha_2")) %>% 
   left_join(amarela_renamed, by = "grupo")
 
+names(impacto)
+excel<-impacto %>% 
+  select(grupo,grupo_label,categoria,n_familias,starts_with("pct_dif"),starts_with("pct_dif_gastos"),starts_with("pct_dif_vermelha")) %>% 
+  mutate(across(where(is.numeric), ~ . * 100)) %>% 
+  rename(
+    # Vermelha 1
+    impacto_perc_renda_vermelha_1   = pct_dif_renda_vermelha_1,
+    impacto_perc_gastos_vermelha_1  = pct_dif_gastos_vermelha_1,
+    perc_dif_gastos_vermelha_1      = pct_dif_vermelha_1,
+    
+    # Vermelha 2
+    impacto_perc_renda_vermelha_2   = pct_dif_renda_vermelha_2,
+    impacto_perc_gastos_vermelha_2  = pct_dif_gastos_vermelha_2,
+    perc_dif_gastos_vermelha_2      = pct_dif_vermelha_2,
+    
+    # Amarela
+    impacto_perc_renda_amarela      = pct_dif_renda_amarela,
+    impacto_perc_gastos_amarela     = pct_dif_gastos_amarela,
+    perc_dif_gastos_amarela         = pct_dif_amarela,
+  )
+
+
+write_xlsx(excel,"output/resultado_impacto_tarifas.xlsx")
+
 
 names(impacto)
-impacto %>%
+impacto2<-impacto %>% 
+  filter(grupo_label%in%focus)
+
+impacto2 %>%
   ggplot(aes(x = grupo_label, y = pct_dif_amarela, fill = categoria)) +
   geom_col(position = position_dodge(width = 0.8)) +
   geom_text(
@@ -352,7 +414,7 @@ impacto %>%
 ggsave("output/impact_amarela.png", width = 8, height = 6)
 
 names(impacto)
-impacto %>%
+impacto2 %>%
   ggplot(aes(x = grupo_label, y = pct_dif_vermelha_1, fill = categoria),alpha=0.4) +
   geom_col(position = position_dodge(width = 0.8),alpha=0.6) +
   geom_text(
@@ -380,7 +442,7 @@ impacto %>%
 ggsave("output/impact_vermelha_1.png", width = 8, height = 6)
 
 
-impacto %>%
+impacto2 %>%
   ggplot(aes(x = grupo_label, y = pct_dif_vermelha_2, fill = categoria)) +
   geom_col(position = position_dodge(width = 0.8)) +
   geom_text(
@@ -409,7 +471,7 @@ ggsave("output/impact_vermelha_2.png", width = 8, height = 6)
 
 ##################### Impacto Gastos e Renda ####################################
 
-table_impacto <- impacto %>% 
+table_impacto <- impacto2 %>% 
   select(grupo_label, categoria, starts_with("pct_dif_renda"), starts_with("pct_dif_gastos")) %>% 
   mutate(across(where(is.numeric), ~ . * 100))
 # 1. Organizar a base
@@ -461,12 +523,21 @@ df_fmt_impacto <- df_tab_impacto %>%
 header_labels <- data.frame(
   col_keys = names(df_fmt_impacto),
   line2 = c("Grupo",
-            "Bandeira Amarela", "Bandeira Amarela", 
-            "Bandeira Vermelha I", "Bandeira Vermelha I",
-            "Bandeira Vermelha II", "Bandeira Vermelha II"),
+            "Bandeira Vermelha II", 
+            "Bandeira Vermelha I",
+            "Bandeira Amarela", 
+            "Bandeira Vermelha II", 
+            "Bandeira Vermelha I",
+            "Bandeira Amarela"
+            ),
   line1 = c("", 
-            "Renda (%)", "Renda (%)", "Renda (%)", 
-            "Gastos totais (%)", "Gastos totais (%)", "Gastos totais (%)"),
+            "Renda (%)",
+            "Renda (%) ",
+            "Renda (%)  ",
+            "Gastos (%)",
+            "Gastos (%) ",
+            "Gastos (%)  "
+  ),
   stringsAsFactors = FALSE
 )
 
@@ -514,8 +585,13 @@ df_tab <- absoluto %>%
     `Gasto anual adicional total (milhões R$)` = montante
   )
 
+
+
+write_xlsx(df_tab,"output/resultado_impacto_tarifas_agregado_montante.xlsx")
+
 # Adicionar linhas de separação por categoria
 df_fmt <- df_tab %>%
+  filter(Grupo %in% focus) %>% 
   group_by(Categoria) %>%
   group_split() %>%
   purrr::map_dfr(~{

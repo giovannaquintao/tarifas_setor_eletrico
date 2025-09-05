@@ -25,7 +25,10 @@ colunas_grupos <- c(
  "homem_negro_ref", "mulher_negra_ref", 
   "homem_branco_ref", "mulher_branca_ref",
   "renda_pc_ate_05", "renda_pc_05a3", "renda_pc_mais3", "rural", "urbano",
-  "mulher_negra_renda_media", "homem_branco_renda_media", "homem_branco_renda_alta",  "mulher_branca_renda_alta"
+ "homem_negro_renda_baixa", "homem_negro_renda_media", "homem_negro_renda_alta",
+ "homem_branco_renda_baixa", "homem_branco_renda_media", "homem_branco_renda_alta",
+ "mulher_negra_renda_baixa", "mulher_negra_renda_media", "mulher_negra_renda_alta",
+ "mulher_branca_renda_baixa", "mulher_branca_renda_media", "mulher_branca_renda_alta"
 )
 
 design <- svydesign(
@@ -86,10 +89,10 @@ stats <- stats %>%
     ic_lower_r = media_renda - 1.96 * erro_padrao_r,
     ic_upper_r = media_renda + 1.96 * erro_padrao_r,
     categoria = case_when(
-      str_detect(grupo, "mulher_negra_renda_media") ~ "Renda/Gênero/Raça",
-      str_detect(grupo, "homem_branco_renda_media") ~ "Renda/Gênero/Raça",
-      str_detect(grupo, "homem_branco_renda_alta") ~ "Renda/Gênero/Raça",
-      str_detect(grupo, "mulher_branca_renda_alta") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "negra_renda") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "negro_renda") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "branco_renda") ~ "Renda/Gênero/Raça",
+      str_detect(grupo, "branca_renda") ~ "Renda/Gênero/Raça",
       grupo %in% c("rural", "urbano") ~ "Localidade",
       str_detect(grupo, "renda") ~ "Renda",
       TRUE ~ "Gênero/Raça"
@@ -106,10 +109,22 @@ stats <- stats %>%
       grupo == "renda_pc_mais3" ~ "Acima de 3 SM per capita",
       grupo == "rural" ~ "Zona rural",
       grupo == "urbano" ~ "Zona urbana",
-      grupo == "mulher_negra_renda_media" ~ "Mulher negra (renda média)",
-      grupo == "homem_branco_renda_media" ~ "Homem branco (renda média)",
-      grupo == "homem_branco_renda_alta" ~ "Homem branco (renda alta)",
-      grupo == "mulher_branca_renda_alta" ~ "Mulher branca (renda alta)",
+      # ---- combinações sexo × raça × renda ----
+      grupo == "homem_negro_renda_baixa"   ~ "Homem negro (renda baixa)",
+      grupo == "homem_negro_renda_media"   ~ "Homem negro (renda média)",
+      grupo == "homem_negro_renda_alta"    ~ "Homem negro (renda alta)",
+      
+      grupo == "homem_branco_renda_baixa"  ~ "Homem branco (renda baixa)",
+      grupo == "homem_branco_renda_media"  ~ "Homem branco (renda média)",
+      grupo == "homem_branco_renda_alta"   ~ "Homem branco (renda alta)",
+      
+      grupo == "mulher_negra_renda_baixa"  ~ "Mulher negra (renda baixa)",
+      grupo == "mulher_negra_renda_media"  ~ "Mulher negra (renda média)",
+      grupo == "mulher_negra_renda_alta"   ~ "Mulher negra (renda alta)",
+      
+      grupo == "mulher_branca_renda_baixa" ~ "Mulher branca (renda baixa)",
+      grupo == "mulher_branca_renda_media" ~ "Mulher branca (renda média)",
+      grupo == "mulher_branca_renda_alta"  ~ "Mulher branca (renda alta)",
       TRUE ~ grupo
     )
   ) %>% 
@@ -125,6 +140,37 @@ df_long <- stats %>%
          variavel = recode(variavel,
                            "media_consumo" = "Gasto Energia sobre Gastos com Habitação (%)",
                            "media_renda" = "Gasto Energia sobre Renda Total (%)"))
+names(df_long)
+excel<-df_long %>% 
+  select(grupo_label,categoria,variavel,media,ic_lower,ic_upper) %>% 
+  mutate(media=media*100,
+         ic_lower=ic_lower*100,
+         ic_upper=ic_upper*100) 
+
+excel2<-excel %>% 
+  rename(intervalo_confianca_inferior=ic_lower,
+         intervalo_confianca_superior=ic_upper)
+
+write_xlsx(excel2,"output/gastos_relativo_energia.xlsx")
+
+
+k<-excel %>% filter(categoria == "Renda") %>% 
+  mutate(grupo_label = fct_reorder(grupo_label, media, .desc = TRUE))
+
+
+ggplot(k)+ 
+  aes(x = grupo_label, y = media, fill = variavel) +
+  geom_col(position = position_dodge(width = 0.8)) +
+  geom_errorbar(aes(ymin = ic_lower, ymax = ic_upper),
+                position = position_dodge(width = 0.8), width = 0.2) +
+  facet_wrap(~variavel, scales = "free_y") +
+  #scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none")
+
 
 
 ################### 3. Generating Graphs ################################
